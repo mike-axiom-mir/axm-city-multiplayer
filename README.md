@@ -112,6 +112,8 @@ See [`AGENTS.md`](AGENTS.md). Do not let one conversation fan out across multipl
 - [`docs/CITY_MESH_FOUNDATION.md`](docs/CITY_MESH_FOUNDATION.md) — architecture and decisions captured from the founding discussion.
 - [`docs/RESEARCH_GATES.md`](docs/RESEARCH_GATES.md) — measurements required before large claims are allowed.
 - [`docs/FIRST_JOIN_INTEGRITY_NOTICE.md`](docs/FIRST_JOIN_INTEGRITY_NOTICE.md) — draft first-entry integrity notice.
+- [`docs/STARTER_EXPERIMENT_1_2KM.md`](docs/STARTER_EXPERIMENT_1_2KM.md) — costed, lawful, measurement-first plan for the first 1–2 km fixed link.
+- [`docs/PREDICTION_LOG.md`](docs/PREDICTION_LOG.md) — timestamped hypotheses with future review criteria.
 
 ## External technical starting points
 
