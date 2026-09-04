@@ -31,7 +31,9 @@ v0.1 therefore provides:
 3. game/build compatibility fields;
 4. a session secret shared only through the invite;
 5. an authenticated UDP join handshake;
-6. deterministic failure when direct connectivity is unavailable.
+6. deterministic failure when direct connectivity is unavailable;
+7. a stable game-facing `AXMP2PLayer` integration seam;
+8. thread-safe guest-admission events for host games.
 
 The UDP code is a **reference handshake**. Production games should plug their engine/network transport behind the same invite contract and provide appropriate encryption, replay protection, packet ordering, congestion control, and game-state validation.
 
@@ -88,21 +90,48 @@ If the ISP/router topology prevents direct reachability, the free P2P mode is al
 
 ## Game integration boundary
 
-A game should expose only two ordinary UI actions:
+Games should integrate through `AXMP2PLayer` instead of importing invite/HMAC/UDP internals directly.
+
+```python
+from axm_p2p import AXMP2PLayer
+
+net = AXMP2PLayer(game_id="axm.shooter", build="build-001")
+
+# Host
+host = net.host(public_host="203.0.113.50", port=28741)
+print(host.invite_token)
+peer = host.wait_for_guest(timeout=30)
+
+# Guest
+result = net.join(pasted_invite, timeout=3)
+if result.connected:
+    print("DIRECT_CONNECTED")
+else:
+    print(result.code)
+```
+
+The game-facing flow remains deliberately small:
 
 ```text
 HOST MULTIPLAYER
 → create local session
 → expose/copy invite
+→ receive guest-admitted event
 
 JOIN MULTIPLAYER
 → paste invite
 → validate game + build
 → attempt direct connection
-→ CONNECTED or DIRECT_CONNECTION_UNAVAILABLE
+→ DIRECT_CONNECTED or stable failure code
 ```
 
 The game owns the actual gameplay protocol after connection.
+
+## Browser boundary
+
+The native reference adapter uses direct UDP sockets. Normal browser pages cannot open arbitrary UDP sockets, so a browser-only game must use a different transport adapter behind the same layer contract or a native local wrapper. Do not introduce an AXM-funded relay/rendezvous service merely to hide that platform limitation.
+
+See `SHOOTER_LAYER_TEST.md` for the bounded future shooter integration gate and `examples/shooter_layer_smoke.py` for the host/join shape.
 
 ## Test
 
@@ -110,4 +139,4 @@ The game owns the actual gameplay protocol after connection.
 python -m unittest discover -s tests -v
 ```
 
-The reference suite checks invite round-trip, expiry, corruption, build mismatch, and a real localhost UDP host/guest handshake.
+The current reference suite checks invite round-trip, expiry, corruption, build mismatch, direct localhost handshake, stable layer result codes, and the game-facing host/join admission flow.
