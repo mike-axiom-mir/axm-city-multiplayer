@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">AXM Peer Fabric visual log</title>
+  <desc id="desc">Mike - Axiom/Mir multiplayer architecture showing LAN substrate, four discovery scopes, Peer Fabric services and direct P2P matches.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07101d"/>
+      <stop offset="1" stop-color="#111a2b"/>
+    </linearGradient>
+    <linearGradient id="lane" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#14243a"/>
+      <stop offset="1" stop-color="#1d314b"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <style>
+      .t{font-family:Inter,Segoe UI,Arial,sans-serif;fill:#edf7ff}.m{fill:#9db4c8}.h{font-weight:800;letter-spacing:1px}.small{font-size:20px}.mid{font-size:26px}.big{font-size:54px}.box{fill:url(#lane);stroke:#4f7a9e;stroke-width:2}.accent{stroke:#62d6ff;fill:none;stroke-width:3}.green{stroke:#70e2a5}.purple{stroke:#aa8cff}.dot{fill:#d8f5ff;stroke:#62d6ff;stroke-width:3}.label{font-size:22px;font-weight:700}.sub{font-size:17px;fill:#a9bfd1}.chip{fill:#0d1928;stroke:#36516c;stroke-width:1.5}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <g transform="translate(70 58)">
+    <text class="t h big" x="0" y="0">AXM PEER FABRIC</text>
+    <text class="t mid" x="0" y="42">MIKE - AXIOM / MIR</text>
+    <text class="m small" x="0" y="78">Player-owned multiplayer • serverless by default • server-capable by exception</text>
+  </g>
+
+  <g transform="translate(70 175)">
+    <text class="t h mid" x="0" y="0">DISCOVERY LADDER</text>
+    <text class="m small" x="0" y="32">LAN is the substrate. The player chooses how far discovery may travel.</text>
+
+    <rect class="box" x="0" y="66" rx="18" width="270" height="116"/>
+    <text class="t label" x="26" y="108">LAN SUBSTRATE</text>
+    <text class="sub" x="26" y="139">local • direct • independent</text>
+    <text class="sub" x="26" y="163">not counted as online scope</text>
+
+    <path class="accent" d="M270 124 H320"/>
+
+    <rect class="box" x="320" y="66" rx="18" width="250" height="116"/>
+    <text class="t label" x="346" y="108">1 · FRIEND P2P</text>
+    <text class="sub" x="346" y="139">invite + remembered consent</text>
+    <text class="sub" x="346" y="163">known peer, direct match</text>
+
+    <path class="accent green" d="M570 124 H620"/>
+
+    <rect class="box" x="620" y="66" rx="18" width="270" height="116"/>
+    <text class="t label" x="646" y="108">2 · PRIVATE GROUP</text>
+    <text class="sub" x="646" y="139">club • clan • game night</text>
+    <text class="sub" x="646" y="163">optional federation</text>
+
+    <path class="accent purple" d="M890 124 H940"/>
+
+    <rect class="box" x="940" y="66" rx="18" width="270" height="116"/>
+    <text class="t label" x="966" y="108">3 · GAME PUBLIC</text>
+    <text class="sub" x="966" y="139">unknown compatible players</text>
+    <text class="sub" x="966" y="163">distributed quick match</text>
+
+    <path class="accent" d="M1210 124 H1260"/>
+
+    <rect class="box" x="1260" y="66" rx="18" width="270" height="116"/>
+    <text class="t label" x="1286" y="108">4 · GLOBAL AXM</text>
+    <text class="sub" x="1286" y="139">shared discovery substrate</text>
+    <text class="sub" x="1286" y="163">game namespaces stay isolated</text>
+  </g>
+
+  <g transform="translate(70 405)">
+    <text class="t h mid" x="0" y="0">THE FABRIC UNDER THE PLAY BUTTON</text>
+    <rect class="chip" x="0" y="38" rx="16" width="230" height="74"/><text class="t label" x="30" y="83">IDENTITY + CONSENT</text>
+    <rect class="chip" x="255" y="38" rx="16" width="220" height="74"/><text class="t label" x="291" y="83">ROUTER HELPER</text>
+    <rect class="chip" x="500" y="38" rx="16" width="245" height="74"/><text class="t label" x="538" y="83">IGNITION PEERS</text>
+    <rect class="chip" x="770" y="38" rx="16" width="250" height="74"/><text class="t label" x="803" y="83">SIGNED PRESENCE</text>
+    <rect class="chip" x="1045" y="38" rx="16" width="240" height="74"/><text class="t label" x="1083" y="83">MATCH PROPOSALS</text>
+    <rect class="chip" x="1310" y="38" rx="16" width="220" height="74"/><text class="t label" x="1350" y="83">PATH REPAIR</text>
+  </g>
+
+  <g transform="translate(70 585)">
+    <text class="t h mid" x="0" y="0">DIRECT MATCH · SHARED TRUTH</text>
+    <circle class="dot" cx="170" cy="125" r="34"/><text class="t label" x="133" y="184">PEER A</text>
+    <circle class="dot" cx="510" cy="125" r="34"/><text class="t label" x="473" y="184">PEER B</text>
+    <circle class="dot" cx="850" cy="125" r="34"/><text class="t label" x="813" y="184">PEER C</text>
+    <circle class="dot" cx="1190" cy="125" r="34"/><text class="t label" x="1153" y="184">PEER D</text>
+    <path class="accent" filter="url(#glow)" d="M204 125 H476 M544 125 H816 M884 125 H1156"/>
+    <path class="accent green" d="M170 91 C330 10 690 10 850 91 M510 159 C680 250 1020 250 1190 159"/>
+    <rect class="box" x="1320" y="73" rx="18" width="210" height="118"/>
+    <text class="t label" x="1346" y="112">CANONICAL</text>
+    <text class="t label" x="1346" y="140">GAME TIME</text>
+    <text class="sub" x="1346" y="169">host role ≠ privileged time</text>
+  </g>
+
+  <g transform="translate(70 825)">
+    <text class="t h mid" x="0" y="0">GAMES BY PLAYERS. FOR PLAYERS. BUILT TO SURVIVE THEIR SERVERS.</text>
+    <text class="m small" x="0" y="34">No silent paid relay • bounded discovery • low-bandwidth discipline • rollback/fairness • host migration • old-game resurrection</text>
+  </g>
+</svg>
