@@ -37,6 +37,42 @@ v0.1 therefore provides:
 
 The UDP code is a **reference handshake**. Production games should plug their engine/network transport behind the same invite contract and provide appropriate encryption, replay protection, packet ordering, congestion control, and game-state validation.
 
+## Peer Fabric research extension
+
+The same PR lane now also preserves the larger serverless-multiplayer research direction discovered after the v0.1 direct invite worked:
+
+```text
+friend / social invite / ignition peer
+            ↓
+cryptographic peer identity + consent
+            ↓
+private / federated / public groups
+            ↓
+bounded decentralized discovery overlay
+            ↓
+signed expiring presence tickets
+            ↓
+local peer-to-peer matchmaking proposals
+            ↓
+direct P2P game
+```
+
+The important distinction is:
+
+- **measured base:** direct invite/admission reference core;
+- **research:** remembered peer bonds, router helper, community endpoint observation, public groups, decentralized discovery/matchmaking, host fairness, rollback and coordinator migration.
+
+Public discovery does **not** mean every player connects to every other player. A scalable public fabric should use a bounded overlay for discovery and create actual game connections only for selected matches.
+
+The research direction also does not require blockchain-style permanent global consensus. Presence and match-search state should be signed, scoped and short-lived.
+
+See:
+
+- `PEER_FABRIC_ARCHITECTURE.md` — complete architecture and truth boundaries;
+- `PEER_FABRIC_RESEARCH_GATES.md` — bounded experiments from router/NAT repair through public matchmaking and old-game resurrection;
+- `RESEARCH_P2P_ONLY.md` — protocol precedents and direct-only networking boundary;
+- `SHOOTER_LAYER_TEST.md` — existing bounded shooter admission gate.
+
 ## Invite contract
 
 Invite prefix:
@@ -84,7 +120,7 @@ python -m axm_p2p.cli join "AXMP2P1...." \
 
 ### Internet use
 
-The host address/port must actually be reachable by the guest. On many home routers this means a port mapping or port-forwarding rule. A future adapter may automate router mapping locally, but **no third-party relay is part of the default design**.
+The host address/port must actually be reachable by the guest. On many home routers this means a port mapping or port-forwarding rule. A future adapter may automate router mapping locally, but **no third-party gameplay relay is part of the default design**.
 
 If the ISP/router topology prevents direct reachability, the free P2P mode is allowed to fail. Users or communities may host their own additional infrastructure outside this core if they want different trade-offs.
 
