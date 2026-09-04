@@ -66,9 +66,43 @@ Public discovery does **not** mean every player connects to every other player. 
 
 The research direction also does not require blockchain-style permanent global consensus. Presence and match-search state should be signed, scoped and short-lived.
 
+## Four player-chosen online discovery scopes
+
+LAN is the local substrate and remains usable independently. It is not counted as one of the four wider online scopes.
+
+```text
+LAN substrate
+     |
+     v
+1. FRIEND P2P
+     |
+     v
+2. PRIVATE SOCIAL GROUP P2P
+     |
+     v
+3. PUBLIC PER-GAME P2P
+     |
+     v
+4. GLOBAL AXM P2P FABRIC
+```
+
+The four scopes are progressively wider consent/discovery boundaries on the same Peer Fabric, not four separate networking implementations.
+
+- **Friend P2P** — explicit invites and remembered consent-based peers.
+- **Private social group P2P** — clan/club/game-night discovery inside a bounded private community, with optional explicit group federation.
+- **Public per-game P2P** — strangers can publish signed expiring game-scoped availability and form direct matches through a decentralized discovery overlay.
+- **Global AXM P2P Fabric** — participating games share the wider bootstrap/discovery substrate while actual matchmaking remains separated by game/protocol/ruleset namespace.
+
+A wider scope expands discovery. It does **not** grant permanent trust or broadcast a player's endpoint to everyone. Actual direct-connect authorization remains bounded to the selected connection/match.
+
+The implementation must not silently widen the player's selected scope.
+
+See `PEER_FABRIC_DISCOVERY_SCOPES.md` for the full four-scope model, permission boundaries, cross-game separation and dedicated research gates.
+
 See:
 
 - `PEER_FABRIC_ARCHITECTURE.md` — complete architecture and truth boundaries;
+- `PEER_FABRIC_DISCOVERY_SCOPES.md` — LAN substrate + four player-chosen online discovery scopes;
 - `PEER_FABRIC_RESEARCH_GATES.md` — bounded experiments from router/NAT repair through public matchmaking and old-game resurrection;
 - `RESEARCH_P2P_ONLY.md` — protocol precedents and direct-only networking boundary;
 - `SHOOTER_LAYER_TEST.md` — existing bounded shooter admission gate.
