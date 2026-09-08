@@ -1,0 +1,1 @@
+{"schema":"axm-third-party-v1","repository":"axm-city-multiplayer","project_license":"Apache-2.0","audit":{"status":"baseline","complete":false,"note":"Networking libraries/providers/relays must be explicit. Local/P2P capability must not silently depend on paid or proprietary relay infrastructure."},"entries":[]}
