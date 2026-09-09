@@ -1,0 +1,136 @@
+name: TruthGrid replay evidence bridge
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/truthgrid-replay-evidence.yml"
+      - "axm_p2p/replay_evidence.py"
+      - "tests/test_replay_evidence.py"
+      - "REPLAY_EVIDENCE_BRIDGE.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/truthgrid-replay-evidence.yml"
+      - "axm_p2p/replay_evidence.py"
+      - "tests/test_replay_evidence.py"
+      - "REPLAY_EVIDENCE_BRIDGE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Python ${{ matrix.python }} / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.11"
+            node: "20"
+          - python: "3.13"
+            node: "22"
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Run complete consumer suite
+        run: |
+          python -m compileall -q axm_p2p tests
+          python -m unittest discover -s tests -v
+
+      - name: Checkout exact TruthGrid provider
+        uses: actions/checkout@v4
+        with:
+          repository: mike-axiom-mir/axm-TruthGrid
+          ref: 38dd064297870a9e9f092e14c80c3f4b401998e0
+          path: _provider/truthgrid
+
+      - name: Verify provider identity and native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C _provider/truthgrid rev-parse HEAD)"
+          test "$actual" = "38dd064297870a9e9f092e14c80c3f4b401998e0"
+          cd _provider/truthgrid
+          npm test
+          npm run test:package
+
+      - name: Prove clean offline provider-to-consumer bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/truthgrid-pack" "$RUNNER_TEMP/truthgrid-consumer"
+          tarball="$(cd _provider/truthgrid && npm pack --pack-destination "$RUNNER_TEMP/truthgrid-pack")"
+          npm install --offline --ignore-scripts \
+            --prefix "$RUNNER_TEMP/truthgrid-consumer" \
+            "$RUNNER_TEMP/truthgrid-pack/$tarball"
+          provider="$RUNNER_TEMP/truthgrid-consumer/node_modules/.bin/truthgrid-replay"
+          capsule="$RUNNER_TEMP/truthgrid-capsule.json"
+          receipt="$RUNNER_TEMP/city-replay-evidence.json"
+          "$provider" create \
+            --input _provider/truthgrid/examples/replay-request.json \
+            --output "$capsule"
+          python -m axm_p2p.replay_evidence \
+            --provider-cli "$provider" \
+            --capsule "$capsule" > "$receipt"
+          python - "$receipt" <<'PY'
+          import json, sys
+          receipt = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert receipt["schema"] == "axm.city-multiplayer.replay-evidence/v0.1"
+          assert receipt["status"] == "VERIFIED_RUNTIME_EVIDENCE"
+          assert receipt["evidenceAuthority"] == "EVIDENCE_ONLY"
+          assert receipt["provider"]["capability"] == "axm.truthgrid-replay-capsule/v0.01"
+          assert receipt["provider"]["engineVersion"] == "truthgrid-engine/v0.01"
+          assert receipt["provider"]["rulesetVersion"] == "truthgrid-rules/v0.01"
+          assert receipt["capsule"]["optimizedEqualsReference"] is True
+          assert receipt["capsule"]["actions"] == 8
+          assert receipt["capsule"]["ticks"] == 4
+          assert not any(receipt["authority"].values())
+          assert len(receipt["receiptSha256"]) == 64
+          print(json.dumps({
+              "status": receipt["status"],
+              "actions": receipt["capsule"]["actions"],
+              "ticks": receipt["capsule"]["ticks"],
+              "authority": receipt["evidenceAuthority"],
+          }, sort_keys=True))
+          PY
+
+      - name: Prove tampered capsule fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          provider="$RUNNER_TEMP/truthgrid-consumer/node_modules/.bin/truthgrid-replay"
+          capsule="$RUNNER_TEMP/truthgrid-capsule.json"
+          tampered="$RUNNER_TEMP/truthgrid-capsule-tampered.json"
+          python - "$capsule" "$tampered" <<'PY'
+          import json, sys
+          value = json.load(open(sys.argv[1], encoding="utf-8"))
+          value["finalHash"] = "0000000000000000"
+          json.dump(value, open(sys.argv[2], "w", encoding="utf-8"), separators=(",", ":"))
+          PY
+          set +e
+          python -m axm_p2p.replay_evidence \
+            --provider-cli "$provider" \
+            --capsule "$tampered" > "$RUNNER_TEMP/tampered-receipt.json"
+          code=$?
+          set -e
+          test "$code" = "2"
+          python - "$RUNNER_TEMP/tampered-receipt.json" <<'PY'
+          import json, sys
+          receipt = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert receipt["status"] == "HOLD"
+          assert receipt["code"] == "PROVIDER_REJECTED_CAPSULE"
+          assert receipt["evidenceAuthority"] == "NONE"
+          assert not any(receipt["authority"].values())
+          PY
