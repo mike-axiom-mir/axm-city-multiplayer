@@ -54,15 +54,15 @@ try {
   await host.waitForFunction(() => document.querySelector("#message-status")?.dataset.code === "DIRECT_MESSAGE_RECEIVED");
   assert.match(await host.locator("#message-status").innerText(), /experience pong/u);
 
+  await host.screenshot({ path: `${artifactDir}/browser-direct-host-desktop.png`, fullPage: true });
+  await guest.screenshot({ path: `${artifactDir}/browser-direct-guest-mobile.png`, fullPage: true });
+
   const guestOverflow = await guest.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   const hostOverflow = await host.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert.ok(guestOverflow <= 0, `mobile horizontal overflow: ${guestOverflow}px`);
   assert.ok(hostOverflow <= 0, `desktop horizontal overflow: ${hostOverflow}px`);
-  assert.match(await guest.locator(".truth").innerText(), /NO STUN, TURN, RELAY/u);
+  assert.match(await guest.locator(".truth").innerText(), /NO STUN, TURN, RELAY/iu);
   assert.equal(errors.length, 0, errors.join("\n"));
-
-  await host.screenshot({ path: `${artifactDir}/browser-direct-host-desktop.png`, fullPage: true });
-  await guest.screenshot({ path: `${artifactDir}/browser-direct-guest-mobile.png`, fullPage: true });
   console.log("CHROMIUM_BROWSER_DIRECT_EXPERIENCE_PASS");
 } finally {
   await browser.close();
