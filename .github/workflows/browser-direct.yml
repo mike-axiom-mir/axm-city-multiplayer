@@ -1,0 +1,37 @@
+name: Browser direct transport
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  contract-and-chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Contract and simulated transport tests
+        run: node --test browser/tests/manual_webrtc.test.mjs
+      - name: Install pinned browser test driver
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Real Chromium direct DataChannel smoke
+        run: |
+          python3 -m http.server 8765 > /tmp/axm-browser-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:8765/browser/test_harness.html >/dev/null && break
+            sleep 0.25
+          done
+          node browser/tests/chromium_smoke.mjs
+      - name: Native reference regression
+        run: python3 -m unittest discover -s tests -v

@@ -201,6 +201,10 @@ The game owns the actual gameplay protocol after connection.
 
 The native reference adapter uses direct UDP sockets. Normal browser pages cannot open arbitrary UDP sockets, so a browser-only game must use a different transport adapter behind the same layer contract or a native local wrapper. Do not introduce an AXM-funded relay/rendezvous service merely to hide that platform limitation.
 
+This repository now includes one bounded browser-native experiment: `browser/manual_webrtc.mjs` uses a direct WebRTC DataChannel with manual copy/paste offer/answer signaling and an empty ICE-server list. Run the local two-peer desk with `python -m http.server 8765`, then open `http://127.0.0.1:8765/browser/`. See `BROWSER_DIRECT_LINK.md` for the API, executable Chromium gate, reachability limits, and security boundary.
+
+The browser `AXMWEBRTC1.` token is intentionally distinct from the native UDP `AXMP2P1.` invite. Neither is silently reinterpreted as the other.
+
 See `SHOOTER_LAYER_TEST.md` for the bounded future shooter integration gate and `examples/shooter_layer_smoke.py` for the host/join shape.
 
 ## Test

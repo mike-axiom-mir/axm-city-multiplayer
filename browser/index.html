@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXM Browser Direct Link</title>
+<style>
+  :root { color-scheme: dark; font: 16px/1.45 system-ui, sans-serif; background: #091016; color: #e8f1f5; }
+  body { max-width: 920px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { margin-bottom: .25rem; } .truth { color: #9ed8c3; margin-top: 0; }
+  main { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  section { border: 1px solid #29414d; border-radius: 12px; padding: 1rem; background: #101b22; }
+  label { display: block; margin: .65rem 0 .25rem; } input, textarea, button { box-sizing: border-box; width: 100%; font: inherit; }
+  input, textarea { color: inherit; background: #071016; border: 1px solid #46616e; border-radius: 6px; padding: .6rem; }
+  textarea { min-height: 7rem; resize: vertical; } button { margin-top: .65rem; padding: .7rem; border: 0; border-radius: 7px; background: #65d6a9; color: #07130f; font-weight: 700; cursor: pointer; }
+  output { display: block; min-height: 1.5rem; margin-top: .75rem; color: #ffd486; overflow-wrap: anywhere; }
+  .full { grid-column: 1 / -1; } code { color: #b8eaff; }
+</style>
+<body>
+<h1>AXM Browser Direct Link</h1>
+<p class="truth">Manual copy/paste signaling · direct WebRTC DataChannel · no STUN, TURN, relay, lobby, account, or external service</p>
+<p>This is a transport test desk, not a game lobby. It succeeds only when the browsers can form a direct route. Failure is reported as <code>DIRECT_CONNECTION_UNAVAILABLE</code>.</p>
+<main>
+  <section>
+    <h2>1. Host creates offer</h2>
+    <label>Game ID <input id="host-game" value="axm.example"></label>
+    <label>Build <input id="host-build" value="build-001"></label>
+    <button id="make-offer">Create direct offer</button>
+    <label>Send this offer to the guest <textarea id="offer-out" readonly></textarea></label>
+    <label>Paste the guest answer <textarea id="answer-in"></textarea></label>
+    <button id="accept-answer">Accept answer</button>
+    <output id="host-status">NOT_CONNECTED</output>
+  </section>
+  <section>
+    <h2>2. Guest creates answer</h2>
+    <label>Game ID <input id="guest-game" value="axm.example"></label>
+    <label>Build <input id="guest-build" value="build-001"></label>
+    <label>Paste the host offer <textarea id="offer-in"></textarea></label>
+    <button id="make-answer">Create direct answer</button>
+    <label>Send this answer to the host <textarea id="answer-out" readonly></textarea></label>
+    <output id="guest-status">NOT_CONNECTED</output>
+  </section>
+  <section class="full">
+    <h2>3. Verify the channel</h2>
+    <label>Message <input id="message" value="hello direct peer"></label>
+    <button id="send">Send from whichever side is connected</button>
+    <output id="message-status">NO_MESSAGE_SENT</output>
+  </section>
+</main>
+<script type="module" src="./demo.mjs"></script>
+</body>
+</html>
