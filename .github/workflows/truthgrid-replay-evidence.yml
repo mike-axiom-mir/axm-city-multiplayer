@@ -50,11 +50,17 @@ jobs:
           python -m unittest discover -s tests -v
 
       - name: Checkout exact TruthGrid provider
-        uses: actions/checkout@v4
-        with:
-          repository: mike-axiom-mir/axm-TruthGrid
-          ref: 38dd064297870a9e9f092e14c80c3f4b401998e0
-          path: _provider/truthgrid
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone \
+            --depth 1 \
+            --branch axm/lane-003-portable-replay-capsule \
+            --single-branch \
+            https://github.com/mike-axiom-mir/axm-TruthGrid.git \
+            _provider/truthgrid
+          actual="$(git -C _provider/truthgrid rev-parse HEAD)"
+          test "$actual" = "38dd064297870a9e9f092e14c80c3f4b401998e0"
 
       - name: Verify provider identity and native evidence
         shell: bash
