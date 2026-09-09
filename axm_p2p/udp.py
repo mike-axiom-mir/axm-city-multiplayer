@@ -114,6 +114,11 @@ class P2PHost:
                 continue
 
     def _handle(self, msg: dict, addr) -> None:
+        # A guest can decode an invite immediately before it expires and have
+        # its HELLO arrive afterwards. Recheck at the admission authority so
+        # an already-running host cannot extend invite validity by accident.
+        if self.invite.expires_at < int(time.time()):
+            return
         if msg.get("t") != "HELLO":
             return
         if msg.get("s") != self.invite.session_id:
