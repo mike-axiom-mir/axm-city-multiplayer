@@ -38,11 +38,13 @@ The adapter invokes exactly the executable supplied by the caller, without a she
 
 ## Cross-repository evidence pin
 
-The first interoperability gate is pinned to TruthGrid PR #6 exact head:
+The first reviewed compatibility target is TruthGrid PR #6 exact head:
 
 `38dd064297870a9e9f092e14c80c3f4b401998e0`
 
-CI checks out that exact source, runs its provider tests and clean offline package-consumer gate, installs the packed provider into a disposable directory, creates a real capsule with the installed `truthgrid-replay` command, and feeds that capsule through this consumer. This pin is compatibility evidence, not a runtime dependency or promotion decision.
+That provider head has its own native replay-capsule CI and clean offline package-consumer evidence. The City Multiplayer workflow deliberately does **not** request a broader credential in order to clone the sibling private repository: a normal repository-scoped `GITHUB_TOKEN` cannot read another private repo. Provider-to-consumer execution therefore remains an explicit local/review integration gate using the reviewed provider path, rather than silently widening CI credentials.
+
+The compatibility pin is evidence lineage, not a runtime dependency or promotion decision. If the provider contract or reviewed head changes, the bridge version/pin must be re-evaluated rather than silently accepting drift.
 
 ## Authority boundary
 
@@ -60,6 +62,6 @@ Any later integrity-routing or anti-cheat system must combine game-specific evid
 
 ## Security / local boundary
 
-The external provider process is **not sandboxed** by this adapter. Running it is an explicit local execution decision. The integration gate pins and tests one known provider head; other provider binaries require their own provenance/review.
+The external provider process is **not sandboxed** by this adapter. Running it is an explicit local execution decision. The reviewed pin identifies one compatibility target; other provider binaries require their own provenance/review.
 
 No relay, account, cloud, paid service, AI service, or always-on AXM infrastructure is added by this bridge.
