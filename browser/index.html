@@ -4,46 +4,138 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AXM Browser Direct Link</title>
 <style>
-  :root { color-scheme: dark; font: 16px/1.45 system-ui, sans-serif; background: #091016; color: #e8f1f5; }
-  body { max-width: 920px; margin: 0 auto; padding: 2rem 1rem 4rem; }
-  h1 { margin-bottom: .25rem; } .truth { color: #9ed8c3; margin-top: 0; }
-  main { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  section { border: 1px solid #29414d; border-radius: 12px; padding: 1rem; background: #101b22; }
-  label { display: block; margin: .65rem 0 .25rem; } input, textarea, button { box-sizing: border-box; width: 100%; font: inherit; }
-  input, textarea { color: inherit; background: #071016; border: 1px solid #46616e; border-radius: 6px; padding: .6rem; }
-  textarea { min-height: 7rem; resize: vertical; } button { margin-top: .65rem; padding: .7rem; border: 0; border-radius: 7px; background: #65d6a9; color: #07130f; font-weight: 700; cursor: pointer; }
-  output { display: block; min-height: 1.5rem; margin-top: .75rem; color: #ffd486; overflow-wrap: anywhere; }
-  .full { grid-column: 1 / -1; } code { color: #b8eaff; }
+  :root {
+    color-scheme: dark;
+    font: 16px/1.45 system-ui, sans-serif;
+    background: #071018;
+    color: #e8f1f5;
+    --panel: #101b22;
+    --line: #29414d;
+    --muted: #91a6b0;
+    --ready: #72e0b2;
+    --warm: #ffd486;
+    --held: #ff9b8f;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { max-width: 980px; margin: 0 auto; padding: clamp(1rem, 3vw, 2.2rem) 1rem 4rem; }
+  h1 { margin: 0 0 .25rem; letter-spacing: -.025em; }
+  h2 { margin-top: 0; font-size: 1.16rem; }
+  p { max-width: 75ch; }
+  .truth { color: #9ed8c3; margin-top: 0; font-weight: 650; }
+  .boundary { color: var(--muted); }
+  code { color: #b8eaff; }
+  .role-picker, .phase-rail, main { display: grid; gap: .8rem; }
+  .role-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 1.25rem 0; }
+  .role-picker button[aria-pressed="true"] { outline: 2px solid #d8fff0; outline-offset: 2px; }
+  .phase-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; padding: 0; margin: 0 0 1rem; }
+  .phase-rail li { min-height: 4.6rem; padding: .7rem; border: 1px solid var(--line); border-radius: 10px; background: #0b151c; color: var(--muted); }
+  .phase-rail li::before { display: block; content: attr(data-step); font: 800 .72rem/1 system-ui, sans-serif; letter-spacing: .09em; margin-bottom: .45rem; }
+  .phase-rail li[data-state="active"] { border-color: var(--warm); color: #fff4d9; }
+  .phase-rail li[data-state="done"] { border-color: #3e8f72; color: #bff5df; }
+  .next-action { border-left: 4px solid var(--warm); background: #111b21; padding: .8rem 1rem; margin: 0 0 1rem; }
+  .next-action[data-tone="ready"] { border-left-color: var(--ready); }
+  .next-action[data-tone="held"] { border-left-color: var(--held); }
+  main { grid-template-columns: 1fr; }
+  section { border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: var(--panel); box-shadow: 0 14px 40px rgb(0 0 0 / .18); }
+  label { display: block; margin: .7rem 0 .3rem; font-weight: 650; }
+  input, textarea, button { width: 100%; font: inherit; }
+  input, textarea { color: inherit; background: #071016; border: 1px solid #46616e; border-radius: 7px; padding: .65rem; }
+  textarea { min-height: 8rem; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .83rem; }
+  button { padding: .72rem; border: 1px solid transparent; border-radius: 8px; background: #65d6a9; color: #07130f; font-weight: 800; cursor: pointer; }
+  button.secondary { background: #172832; color: #d9eef5; border-color: #3d5966; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #b8eaff; outline-offset: 2px; }
+  .actions { display: grid; grid-template-columns: 1fr auto; gap: .55rem; align-items: end; }
+  .actions button { width: auto; min-width: 7.2rem; }
+  .token-note { color: var(--muted); font-size: .9rem; margin: .35rem 0 .8rem; }
+  output { display: block; min-height: 2.7rem; margin-top: .85rem; padding: .7rem .8rem; border-radius: 8px; background: #081218; color: var(--warm); overflow-wrap: anywhere; }
+  output[data-tone="ready"] { color: var(--ready); }
+  output[data-tone="held"] { color: var(--held); }
+  .state-label { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .08em; color: var(--muted); margin-bottom: .2rem; }
+  .compact { margin: .3rem 0; }
+  .capabilities { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 0; }
+  .capabilities span { border: 1px solid #31505d; border-radius: 999px; padding: .25rem .55rem; font-size: .78rem; color: #b8d3dd; }
+  @media (max-width: 620px) {
+    body { padding-inline: .75rem; }
+    .phase-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .role-picker { grid-template-columns: 1fr; }
+    .actions { grid-template-columns: 1fr; }
+    .actions button { width: 100%; }
+    textarea { min-height: 7.2rem; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    section, .phase-rail li, .next-action { transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease; }
+  }
+  @media (prefers-contrast: more) {
+    :root { --line: #7194a4; --muted: #c3d3da; }
+    button.secondary { border-color: #9bc3d3; }
+  }
 </style>
 <body>
 <h1>AXM Browser Direct Link</h1>
-<p class="truth">Manual copy/paste signaling · direct WebRTC DataChannel · no STUN, TURN, relay, lobby, account, or external service</p>
-<p>This is a transport test desk, not a game lobby. It succeeds only when the browsers can form a direct route. Failure is reported as <code>DIRECT_CONNECTION_UNAVAILABLE</code>.</p>
+<p class="truth">DIRECT ONLY · manual copy/paste · no STUN, TURN, relay, lobby, account, cloud, or external signaling service</p>
+<p class="boundary">This is a transport test desk, not a game lobby. <strong>Connected</strong> means a WebRTC DataChannel opened between these browsers; it does not prove gameplay sync, player identity, honest inputs, or internet-wide reachability.</p>
+
+<div class="role-picker" aria-label="Choose this browser's role">
+  <button id="role-host" type="button" class="secondary" aria-pressed="false">I’m hosting</button>
+  <button id="role-guest" type="button" class="secondary" aria-pressed="false">I’m joining</button>
+</div>
+
+<ol class="phase-rail" aria-label="Direct connection progress">
+  <li id="phase-role" data-step="STEP 1" data-state="active">Choose this browser’s role</li>
+  <li id="phase-token" data-step="STEP 2">Exchange one offer + one answer</li>
+  <li id="phase-route" data-step="STEP 3">Wait for a direct route</li>
+  <li id="phase-message" data-step="STEP 4">Verify the open channel</li>
+</ol>
+
+<p id="next-action" class="next-action" role="status" aria-live="polite">Choose whether this browser is hosting or joining. Each device uses only its own side.</p>
+
 <main>
-  <section>
-    <h2>1. Host creates offer</h2>
-    <label>Game ID <input id="host-game" value="axm.example"></label>
-    <label>Build <input id="host-build" value="build-001"></label>
-    <button id="make-offer">Create direct offer</button>
-    <label>Send this offer to the guest <textarea id="offer-out" readonly></textarea></label>
-    <label>Paste the guest answer <textarea id="answer-in"></textarea></label>
-    <button id="accept-answer">Accept answer</button>
-    <output id="host-status">NOT_CONNECTED</output>
+  <section id="host-card" hidden aria-labelledby="host-title">
+    <h2 id="host-title">Host · create the offer</h2>
+    <p class="compact">Create one offer, send it to the intended guest, then paste their answer back here. Keep this page open while the guest responds.</p>
+    <label>Game ID <input id="host-game" value="axm.example" autocomplete="off"></label>
+    <label>Build <input id="host-build" value="build-001" autocomplete="off"></label>
+    <button id="make-offer" type="button">Create direct offer</button>
+    <label for="offer-out">Offer token to send</label>
+    <div class="actions">
+      <textarea id="offer-out" readonly spellcheck="false" aria-describedby="offer-privacy"></textarea>
+      <button id="copy-offer" type="button" class="secondary" disabled>Copy offer</button>
+    </div>
+    <p id="offer-privacy" class="token-note">Private handoff: this token contains network candidates. Share it only with the intended guest.</p>
+    <label for="answer-in">Guest answer to paste</label>
+    <textarea id="answer-in" spellcheck="false" autocomplete="off"></textarea>
+    <button id="accept-answer" type="button">Accept answer &amp; try direct route</button>
+    <output id="host-status" aria-live="polite" data-tone="neutral"><span class="state-label">HOST STATE</span>NOT_STARTED</output>
   </section>
-  <section>
-    <h2>2. Guest creates answer</h2>
-    <label>Game ID <input id="guest-game" value="axm.example"></label>
-    <label>Build <input id="guest-build" value="build-001"></label>
-    <label>Paste the host offer <textarea id="offer-in"></textarea></label>
-    <button id="make-answer">Create direct answer</button>
-    <label>Send this answer to the host <textarea id="answer-out" readonly></textarea></label>
-    <output id="guest-status">NOT_CONNECTED</output>
+
+  <section id="guest-card" hidden aria-labelledby="guest-title">
+    <h2 id="guest-title">Guest · turn the offer into an answer</h2>
+    <p class="compact">Paste the host’s offer. This browser validates game/build/session truth before it creates an answer.</p>
+    <label>Game ID <input id="guest-game" value="axm.example" autocomplete="off"></label>
+    <label>Build <input id="guest-build" value="build-001" autocomplete="off"></label>
+    <label for="offer-in">Host offer to paste</label>
+    <textarea id="offer-in" spellcheck="false" autocomplete="off"></textarea>
+    <button id="make-answer" type="button">Validate offer &amp; create answer</button>
+    <label for="answer-out">Answer token to send back</label>
+    <div class="actions">
+      <textarea id="answer-out" readonly spellcheck="false" aria-describedby="answer-privacy"></textarea>
+      <button id="copy-answer" type="button" class="secondary" disabled>Copy answer</button>
+    </div>
+    <p id="answer-privacy" class="token-note">Private handoff: return this token only to the host that created the offer.</p>
+    <output id="guest-status" aria-live="polite" data-tone="neutral"><span class="state-label">GUEST STATE</span>NOT_STARTED</output>
   </section>
-  <section class="full">
-    <h2>3. Verify the channel</h2>
-    <label>Message <input id="message" value="hello direct peer"></label>
-    <button id="send">Send from whichever side is connected</button>
-    <output id="message-status">NO_MESSAGE_SENT</output>
+
+  <section id="verify-card" hidden aria-labelledby="verify-title">
+    <h2 id="verify-title">Verify the channel</h2>
+    <p class="compact">Only use this after <code>DIRECT_CONNECTED</code>. A successful message proves this DataChannel moved JSON between the peers; the game still owns gameplay replication.</p>
+    <label>Message <input id="message" value="hello direct peer" autocomplete="off"></label>
+    <button id="send" type="button" disabled>Send direct test message</button>
+    <output id="message-status" aria-live="polite" data-tone="neutral"><span class="state-label">MESSAGE STATE</span>NO_MESSAGE_SENT</output>
+    <div class="capabilities" aria-label="Transport boundaries">
+      <span>DIRECT ONLY</span><span>NO RELAY FALLBACK</span><span>NO ACCOUNT</span><span>DISPLAY ≠ GAMEPLAY AUTHORITY</span>
+    </div>
   </section>
 </main>
 <script type="module" src="./demo.mjs"></script>
