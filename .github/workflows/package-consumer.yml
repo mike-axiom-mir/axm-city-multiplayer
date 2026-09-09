@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install from checkout without runtime dependencies
-        run: python -m pip install --no-deps --no-build-isolation .
+        run: python -m pip install --no-deps .
       - name: Verify installed import and both CLI entry points
         working-directory: ${{ runner.temp }}
         run: |
