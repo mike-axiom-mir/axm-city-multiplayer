@@ -8,6 +8,7 @@ import secrets
 import socket
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .invite import Invite, decode_invite
@@ -36,9 +37,16 @@ class P2PHost:
     its production gameplay transport after a peer is admitted.
     """
 
-    def __init__(self, invite: Invite, bind_host: str = "0.0.0.0"):
+    def __init__(
+        self,
+        invite: Invite,
+        bind_host: str = "0.0.0.0",
+        *,
+        clock: Callable[[], float] | None = None,
+    ):
         self.invite = invite
         self.bind_host = bind_host
+        self._clock = time.time if clock is None else clock
         self._sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -47,9 +55,14 @@ class P2PHost:
         self._lock = threading.Lock()
         self.peers: list[Peer] = []
 
+    def _invite_expired(self) -> bool:
+        return self.invite.is_expired(now=int(self._clock()))
+
     def start(self) -> None:
         if self._sock is not None:
             return
+        if self._invite_expired():
+            raise HandshakeError("INVITE_EXPIRED")
 
         try:
             info = socket.getaddrinfo(
@@ -114,6 +127,8 @@ class P2PHost:
                 continue
 
     def _handle(self, msg: dict, addr) -> None:
+        if self._invite_expired():
+            return
         if msg.get("t") != "HELLO":
             return
         if msg.get("s") != self.invite.session_id:
@@ -218,7 +233,7 @@ def join_host(
         sock.settimeout(per_candidate_timeout)
         try:
             # Connect the UDP socket so the kernel admits replies only from the
-            # exact endpoint carried by the invite.  HMAC authenticates a
+            # exact endpoint carried by the invite. HMAC authenticates a
             # holder of the bearer secret; it does not, by itself, prove that
             # a datagram came from the invited host address and port.
             sock.connect(sockaddr)
