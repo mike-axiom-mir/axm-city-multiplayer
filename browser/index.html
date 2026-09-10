@@ -36,6 +36,10 @@
   .next-action { border-left: 4px solid var(--warm); background: #111b21; padding: .8rem 1rem; margin: 0 0 1rem; }
   .next-action[data-tone="ready"] { border-left-color: var(--ready); }
   .next-action[data-tone="held"] { border-left-color: var(--held); }
+  .retry-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem 1rem; align-items: center; margin: -.25rem 0 1rem; padding: .85rem 1rem; border: 1px solid #7d4e49; border-radius: 10px; background: #1b1415; }
+  .retry-panel strong { display: block; color: #ffd0ca; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
+  .retry-panel p { margin: .18rem 0 0; color: #d9b9b5; font-size: .9rem; }
+  .retry-panel button { width: auto; min-width: 11rem; min-height: 44px; }
   main { grid-template-columns: 1fr; }
   section { border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: var(--panel); box-shadow: 0 14px 40px rgb(0 0 0 / .18); }
   label { display: block; margin: .7rem 0 .3rem; font-weight: 650; }
@@ -60,16 +64,17 @@
     body { padding-inline: .75rem; }
     .phase-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .role-picker { grid-template-columns: 1fr; }
-    .actions { grid-template-columns: 1fr; }
-    .actions button { width: 100%; }
+    .actions, .retry-panel { grid-template-columns: 1fr; }
+    .actions button, .retry-panel button { width: 100%; }
     textarea { min-height: 7.2rem; }
   }
   @media (prefers-reduced-motion: no-preference) {
-    section, .phase-rail li, .next-action { transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease; }
+    section, .phase-rail li, .next-action, .retry-panel { transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease; }
   }
   @media (prefers-contrast: more) {
     :root { --line: #7194a4; --muted: #c3d3da; }
     button.secondary { border-color: #9bc3d3; }
+    .retry-panel { border-color: #ffd0ca; }
   }
 </style>
 <body>
@@ -90,6 +95,13 @@
 </ol>
 
 <p id="next-action" class="next-action" role="status" aria-live="polite">Choose whether this browser is hosting or joining. Each device uses only its own side.</p>
+<div id="retry-panel" class="retry-panel" role="region" aria-label="Fresh attempt recovery" hidden>
+  <div>
+    <strong>Current attempt held</strong>
+    <p>Close this tab’s current peer and clear its local handoff fields before retrying. A token already shared is not remotely revoked; its own expiry still applies.</p>
+  </div>
+  <button id="fresh-attempt" type="button" class="secondary">Start fresh attempt</button>
+</div>
 
 <main>
   <section id="host-card" hidden aria-labelledby="host-title">
