@@ -24,9 +24,10 @@ class InviteTests(unittest.TestCase):
 
     def test_corruption_rejected(self):
         token = create_invite(game_id="g", build="b", host="127.0.0.1", port=29993, lifetime_seconds=10, now=100)
-        replacement = "A" if token[-1] != "A" else "B"
+        index = len("AXMP2P1.") + 4
+        replacement = "A" if token[index] != "A" else "B"
         with self.assertRaises(InviteError):
-            decode_invite(token[:-1] + replacement, now=101)
+            decode_invite(token[:index] + replacement + token[index + 1 :], now=101)
 
 
 class HandshakeTests(unittest.TestCase):
