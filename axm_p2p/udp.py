@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import queue
 import secrets
 import socket
@@ -15,6 +16,8 @@ from .invite import Invite, decode_invite
 
 
 HANDSHAKE_PROTOCOL_VERSION = 2
+DEFAULT_MAX_PENDING_HANDSHAKES = 128
+DEFAULT_PENDING_HANDSHAKE_TTL_SECONDS = 10.0
 
 
 class HandshakeError(RuntimeError):
@@ -33,11 +36,21 @@ class Peer:
     host_nonce: str
 
 
+@dataclass(frozen=True)
+class _PendingHandshake:
+    host_nonce: str
+    created_at: float
+
+
 class P2PHost:
     """Reference direct-invite host handshake.
 
     Host admission is authoritative only after an authenticated guest ACK proves
     the guest received this host's WELCOME. HELLO alone never emits a peer.
+
+    Incomplete authenticated handshakes are temporary evidence, not peer state.
+    They are bounded by count and age so an invite holder cannot grow the host's
+    pre-admission memory without limit simply by withholding ACKs.
     """
 
     def __init__(
@@ -46,21 +59,44 @@ class P2PHost:
         bind_host: str = "0.0.0.0",
         *,
         clock: Callable[[], float] = time.time,
+        max_pending_handshakes: int = DEFAULT_MAX_PENDING_HANDSHAKES,
+        pending_handshake_ttl_seconds: float = DEFAULT_PENDING_HANDSHAKE_TTL_SECONDS,
     ):
+        if isinstance(max_pending_handshakes, bool) or not isinstance(max_pending_handshakes, int) or max_pending_handshakes <= 0:
+            raise ValueError("max_pending_handshakes must be a positive integer")
+        if (
+            isinstance(pending_handshake_ttl_seconds, bool)
+            or not isinstance(pending_handshake_ttl_seconds, (int, float))
+            or not math.isfinite(float(pending_handshake_ttl_seconds))
+            or pending_handshake_ttl_seconds <= 0
+        ):
+            raise ValueError("pending_handshake_ttl_seconds must be a positive finite number")
+
         self.invite = invite
         self.bind_host = bind_host
         self._clock = clock
+        self._max_pending_handshakes = max_pending_handshakes
+        self._pending_handshake_ttl_seconds = float(pending_handshake_ttl_seconds)
         self._sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._peer_queue: queue.Queue[Peer] = queue.Queue()
-        self._pending: dict[tuple[str, int, str], str] = {}
+        self._pending: dict[tuple[str, int, str], _PendingHandshake] = {}
         self._seen_guest_nonces: set[str] = set()
         self._lock = threading.Lock()
         self.peers: list[Peer] = []
 
     def _invite_expired(self) -> bool:
         return self.invite.expires_at < int(self._clock())
+
+    def _prune_pending_locked(self, now: float) -> None:
+        expired = [
+            key
+            for key, pending in self._pending.items()
+            if now - pending.created_at >= self._pending_handshake_ttl_seconds
+        ]
+        for key in expired:
+            self._pending.pop(key, None)
 
     def start(self) -> None:
         if self._sock is not None:
@@ -149,29 +185,34 @@ class P2PHost:
         guest_nonce = str(msg.get("n", ""))
         if not guest_nonce:
             return
-        address = self._address_key(addr)
-        pending_key = (address[0], address[1], guest_nonce)
-        with self._lock:
-            if guest_nonce in self._seen_guest_nonces:
-                return
-            host_nonce = self._pending.get(pending_key)
-
         expected = _mac(self.invite.session_key, "hello", str(HANDSHAKE_PROTOCOL_VERSION), self.invite.session_id, guest_nonce, self.invite.game_id, self.invite.build)
         if not hmac.compare_digest(str(msg.get("m", "")), expected):
             return
 
-        if host_nonce is None:
-            host_nonce = secrets.token_urlsafe(12)
-            with self._lock:
-                self._pending[pending_key] = host_nonce
+        address = self._address_key(addr)
+        pending_key = (address[0], address[1], guest_nonce)
+        now = float(self._clock())
+        with self._lock:
+            self._prune_pending_locked(now)
+            if guest_nonce in self._seen_guest_nonces:
+                return
+            pending = self._pending.get(pending_key)
+            if pending is None:
+                if len(self._pending) >= self._max_pending_handshakes:
+                    return
+                pending = _PendingHandshake(
+                    host_nonce=secrets.token_urlsafe(12),
+                    created_at=now,
+                )
+                self._pending[pending_key] = pending
 
         reply = {
             "t": "WELCOME",
             "pv": HANDSHAKE_PROTOCOL_VERSION,
             "s": self.invite.session_id,
             "gn": guest_nonce,
-            "hn": host_nonce,
-            "m": _mac(self.invite.session_key, "welcome", str(HANDSHAKE_PROTOCOL_VERSION), self.invite.session_id, guest_nonce, host_nonce),
+            "hn": pending.host_nonce,
+            "m": _mac(self.invite.session_key, "welcome", str(HANDSHAKE_PROTOCOL_VERSION), self.invite.session_id, guest_nonce, pending.host_nonce),
         }
         assert self._sock is not None
         self._sock.sendto(json.dumps(reply, separators=(",", ":")).encode("utf-8"), addr)
@@ -185,11 +226,13 @@ class P2PHost:
             return
         address = self._address_key(addr)
         pending_key = (address[0], address[1], guest_nonce)
+        now = float(self._clock())
         with self._lock:
+            self._prune_pending_locked(now)
             if guest_nonce in self._seen_guest_nonces:
                 return
-            expected_host_nonce = self._pending.get(pending_key)
-        if expected_host_nonce != host_nonce:
+            pending = self._pending.get(pending_key)
+        if pending is None or pending.host_nonce != host_nonce:
             return
         expected = _mac(self.invite.session_key, "ack", str(HANDSHAKE_PROTOCOL_VERSION), self.invite.session_id, guest_nonce, host_nonce)
         if not hmac.compare_digest(str(msg.get("m", "")), expected):
@@ -197,7 +240,9 @@ class P2PHost:
 
         peer = Peer(address, guest_nonce, host_nonce)
         with self._lock:
-            if guest_nonce in self._seen_guest_nonces:
+            self._prune_pending_locked(float(self._clock()))
+            current = self._pending.get(pending_key)
+            if guest_nonce in self._seen_guest_nonces or current is None or current.host_nonce != host_nonce:
                 return
             self._seen_guest_nonces.add(guest_nonce)
             self._pending.pop(pending_key, None)
