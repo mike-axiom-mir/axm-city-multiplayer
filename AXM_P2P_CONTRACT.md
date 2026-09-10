@@ -22,6 +22,11 @@ They copy one invite and send it through any external channel they choose: messa
 
 The guest pastes the invite into the game and attempts a direct connection.
 
+The reference guest accepts handshake replies only from the host address and
+port carried by that invite. The shared session key authenticates an invite
+holder; it must not let a different endpoint race the invited host and become
+the returned peer.
+
 ## Failure is an allowed state
 
 `DIRECT_CONNECTION_UNAVAILABLE` is a legitimate terminal result for the default free P2P path.

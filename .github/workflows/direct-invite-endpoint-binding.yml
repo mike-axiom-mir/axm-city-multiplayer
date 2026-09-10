@@ -1,0 +1,31 @@
+name: Direct invite endpoint binding
+
+on:
+  pull_request:
+    paths:
+      - "axm_p2p/**"
+      - "tests/**"
+      - "README.md"
+      - "AXM_P2P_CONTRACT.md"
+      - ".github/workflows/direct-invite-endpoint-binding.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  direct-invite-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile reference implementation
+        run: python -m compileall -q axm_p2p tests
+      - name: Run complete reference suite
+        run: python -m unittest discover -s tests -v

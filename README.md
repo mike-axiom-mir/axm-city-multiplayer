@@ -30,7 +30,7 @@ v0.1 therefore provides:
 2. expiry and corruption detection;
 3. game/build compatibility fields;
 4. a session secret shared only through the invite;
-5. an authenticated UDP join handshake;
+5. an authenticated UDP join handshake whose replies are bound to the invited host endpoint;
 6. deterministic failure when direct connectivity is unavailable;
 7. a stable game-facing `AXMP2PLayer` integration seam;
 8. thread-safe guest-admission events for host games.
@@ -209,4 +209,4 @@ See `SHOOTER_LAYER_TEST.md` for the bounded future shooter integration gate and 
 python -m unittest discover -s tests -v
 ```
 
-The current reference suite checks invite round-trip, expiry, corruption, build mismatch, direct localhost handshake, stable layer result codes, and the game-facing host/join admission flow.
+The current reference suite checks invite round-trip, expiry, corruption, build mismatch, direct localhost handshake, rejection of an authenticated reply from an uninvited endpoint, stable layer result codes, and the game-facing host/join admission flow.
