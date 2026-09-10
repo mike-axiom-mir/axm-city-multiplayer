@@ -85,20 +85,30 @@ class PendingHandshakeBoundsTests(unittest.TestCase):
         self.assertEqual(len(fake.sent), 2)
         self.assertEqual(host.peer_count, 0)
 
-    def test_retry_of_existing_pending_handshake_reuses_welcome_at_capacity(self):
-        invite, host, fake, _ = self._fixture(max_pending=1)
-        addr = ("127.0.0.1", 42001)
-        hello = self._hello(invite, "guest-a")
+    def test_retry_reuses_welcome_without_extending_pending_lifetime(self):
+        invite, host, fake, now = self._fixture(max_pending=1, ttl=5.0)
+        addr_a = ("127.0.0.1", 42001)
+        addr_b = ("127.0.0.1", 42002)
+        hello_a = self._hello(invite, "guest-a")
 
-        host._handle(hello, addr)
+        host._handle(hello_a, addr_a)
         first_welcome = fake.sent[-1][0]
-        host._handle(self._hello(invite, "guest-b"), ("127.0.0.1", 42002))
-        host._handle(hello, addr)
+
+        now[0] = 1004.0
+        host._handle(hello_a, addr_a)
         second_welcome = fake.sent[-1][0]
+        host._handle(self._hello(invite, "guest-b"), addr_b)
 
         self.assertEqual(len(host._pending), 1)
         self.assertEqual(len(fake.sent), 2)
         self.assertEqual(second_welcome["hn"], first_welcome["hn"])
+
+        now[0] = 1005.0
+        host._handle(self._hello(invite, "guest-b"), addr_b)
+
+        self.assertEqual(len(host._pending), 1)
+        self.assertEqual(len(fake.sent), 3)
+        self.assertEqual(fake.sent[-1][0]["gn"], "guest-b")
 
     def test_expired_pending_slot_is_reclaimed_and_late_ack_cannot_admit(self):
         invite, host, fake, now = self._fixture(max_pending=1, ttl=5.0)
