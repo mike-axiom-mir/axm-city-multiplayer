@@ -232,8 +232,14 @@ def join_host(
         sock = socket.socket(family, socktype, proto)
         sock.settimeout(per_candidate_timeout)
         try:
-            sock.sendto(payload, sockaddr)
-            data, addr = sock.recvfrom(4096)
+            # Connect the UDP socket so the kernel admits replies only from the
+            # exact endpoint carried by the invite. HMAC authenticates a
+            # holder of the bearer secret; it does not, by itself, prove that
+            # a datagram came from the invited host address and port.
+            sock.connect(sockaddr)
+            sock.send(payload)
+            data = sock.recv(4096)
+            addr = sock.getpeername()
             try:
                 reply = json.loads(data.decode("utf-8"))
             except Exception as exc:

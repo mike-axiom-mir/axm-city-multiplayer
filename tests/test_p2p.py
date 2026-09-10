@@ -1,10 +1,12 @@
+import json
 import socket
+import threading
 import time
 import unittest
 from unittest import mock
 
 from axm_p2p.invite import InviteError, create_invite, decode_invite
-from axm_p2p.udp import P2PHost, HandshakeError, join_host
+from axm_p2p.udp import P2PHost, HandshakeError, _mac, join_host
 
 
 def free_udp_port() -> int:
@@ -35,9 +37,10 @@ class InviteTests(unittest.TestCase):
 
     def test_corruption_rejected(self):
         token = create_invite(game_id="g", build="b", host="127.0.0.1", port=29993, lifetime_seconds=10, now=100)
-        replacement = "A" if token[-1] != "A" else "B"
+        index = len("AXMP2P1.") + 4
+        replacement = "A" if token[index] != "A" else "B"
         with self.assertRaises(InviteError):
-            decode_invite(token[:-1] + replacement, now=101)
+            decode_invite(token[:index] + replacement + token[index + 1 :], now=101)
 
 
 class HandshakeTests(unittest.TestCase):
@@ -77,6 +80,60 @@ class HandshakeTests(unittest.TestCase):
                     join_host(token, timeout=0.2, expected_game_id="axm.game", expected_build="build-1")
             self.assertEqual(host.peer_count, 0)
             self.assertIsNone(host.wait_for_peer(timeout=0.05))
+
+    def test_welcome_from_uninvited_endpoint_is_ignored(self):
+        intended = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        attacker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        intended.bind(("127.0.0.1", 0))
+        attacker.bind(("127.0.0.1", 0))
+        intended.settimeout(1.0)
+
+        token = create_invite(
+            game_id="axm.game",
+            build="build-1",
+            host="127.0.0.1",
+            port=intended.getsockname()[1],
+            lifetime_seconds=30,
+        )
+        invite = decode_invite(token)
+
+        def race_welcome_from_wrong_port():
+            data, guest_address = intended.recvfrom(4096)
+            hello = json.loads(data.decode("utf-8"))
+            host_nonce = "attacker-host-nonce"
+            reply = {
+                "t": "WELCOME",
+                "s": invite.session_id,
+                "gn": hello["n"],
+                "hn": host_nonce,
+                "m": _mac(
+                    invite.session_key,
+                    "welcome",
+                    invite.session_id,
+                    hello["n"],
+                    host_nonce,
+                ),
+            }
+            attacker.sendto(
+                json.dumps(reply, separators=(",", ":")).encode("utf-8"),
+                guest_address,
+            )
+
+        racer = threading.Thread(target=race_welcome_from_wrong_port)
+        racer.start()
+        try:
+            with self.assertRaisesRegex(HandshakeError, "DIRECT_CONNECTION_UNAVAILABLE"):
+                join_host(
+                    token,
+                    timeout=0.2,
+                    expected_game_id="axm.game",
+                    expected_build="build-1",
+                )
+        finally:
+            racer.join(timeout=1.0)
+            intended.close()
+            attacker.close()
+        self.assertFalse(racer.is_alive())
 
 
 if __name__ == "__main__":
