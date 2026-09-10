@@ -33,7 +33,8 @@ v0.1 therefore provides:
 5. an authenticated UDP join handshake whose replies are bound to the invited host endpoint;
 6. deterministic failure when direct connectivity is unavailable;
 7. a stable game-facing `AXMP2PLayer` integration seam;
-8. thread-safe guest-admission events for host games.
+8. thread-safe guest-admission events for host games;
+9. one in-flight host/join transition per game-facing layer instance.
 
 The UDP code is a **reference handshake**. Production games should plug their engine/network transport behind the same invite contract and provide appropriate encryption, replay protection, packet ordering, congestion control, and game-state validation.
 

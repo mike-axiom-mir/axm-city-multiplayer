@@ -44,3 +44,15 @@ The invite and join-state contract should remain transport-neutral enough to sup
 - LAN-only builds.
 
 Transport choice may change. The economic boundary does not.
+
+## Game-facing layer operation ownership
+
+One `AXMP2PLayer` instance admits at most one transient `host()` or `join()`
+operation at a time. The claim is established before invite or transport work
+begins and released on success or failure. A concurrent call fails closed with
+`LAYER_OPERATION_IN_PROGRESS` and does not overwrite the owning operation's
+`JOINING` state or enter a transport adapter.
+
+An active host session remains a longer-lived, separate ownership state and is
+reported as `HOST_SESSION_ALREADY_ACTIVE`. This is an in-process integration
+invariant, not a cross-process lock or a gameplay-connection lifecycle.

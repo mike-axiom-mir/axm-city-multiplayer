@@ -180,3 +180,86 @@ class LayerTests(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertEqual(len(first_result), 1)
         self.assertTrue(first_result[0].connected)
+
+    def test_second_host_is_held_while_first_host_is_starting(self):
+        layer = AXMP2PLayer(game_id="axm.shooter", build="build-a")
+        first_started = threading.Event()
+        release_first = threading.Event()
+        first_session = []
+        first_error = []
+
+        def controlled_start(_transport):
+            first_started.set()
+            self.assertTrue(release_first.wait(timeout=2.0))
+
+        def start_first_host():
+            try:
+                first_session.append(
+                    layer.host(
+                        public_host="127.0.0.1",
+                        bind_host="127.0.0.1",
+                        port=free_udp_port(),
+                    )
+                )
+            except BaseException as exc:  # preserved for assertion in the test thread
+                first_error.append(exc)
+
+        with patch("axm_p2p.layer.P2PHost.start", autospec=True, side_effect=controlled_start):
+            worker = threading.Thread(target=start_first_host)
+            worker.start()
+            self.assertTrue(first_started.wait(timeout=1.0))
+            try:
+                with self.assertRaisesRegex(HandshakeError, "^LAYER_OPERATION_IN_PROGRESS$"):
+                    layer.host(
+                        public_host="127.0.0.1",
+                        bind_host="127.0.0.1",
+                        port=free_udp_port(),
+                    )
+            finally:
+                release_first.set()
+                worker.join(timeout=2.0)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(first_error, [])
+        self.assertEqual(len(first_session), 1)
+        self.assertEqual(layer.state, LayerState.HOSTING)
+        first_session[0].close()
+        self.assertEqual(layer.state, LayerState.CLOSED)
+
+    def test_unexpected_join_failure_releases_operation_claim(self):
+        layer = AXMP2PLayer(game_id="axm.shooter", build="build-a")
+        with patch("axm_p2p.layer.join_host", side_effect=RuntimeError("adapter failed")):
+            with self.assertRaisesRegex(RuntimeError, "^adapter failed$"):
+                layer.join("invite-a", timeout=1.0)
+        self.assertEqual(layer.state, LayerState.FAILED)
+
+        peer = Peer(("127.0.0.1", 28741), "guest", "host")
+        with patch("axm_p2p.layer.join_host", return_value=peer):
+            retry = layer.join("invite-a", timeout=1.0)
+        self.assertTrue(retry.connected)
+        self.assertEqual(layer.state, LayerState.CONNECTED)
+
+    def test_host_start_failure_releases_operation_claim(self):
+        layer = AXMP2PLayer(game_id="axm.shooter", build="build-a")
+        with patch(
+            "axm_p2p.layer.P2PHost.start",
+            autospec=True,
+            side_effect=HandshakeError("cannot bind"),
+        ):
+            with self.assertRaisesRegex(HandshakeError, "^cannot bind$"):
+                layer.host(
+                    public_host="127.0.0.1",
+                    bind_host="127.0.0.1",
+                    port=free_udp_port(),
+                )
+        self.assertEqual(layer.state, LayerState.IDLE)
+
+        with patch("axm_p2p.layer.P2PHost.start", autospec=True):
+            retry = layer.host(
+                public_host="127.0.0.1",
+                bind_host="127.0.0.1",
+                port=free_udp_port(),
+            )
+        self.assertEqual(layer.state, LayerState.HOSTING)
+        retry.close()
+        self.assertEqual(layer.state, LayerState.CLOSED)
