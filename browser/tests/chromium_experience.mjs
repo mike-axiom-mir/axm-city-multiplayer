@@ -26,8 +26,46 @@ try {
 
   await host.click("#make-offer");
   await host.waitForFunction(() => document.querySelector("#host-status")?.dataset.code === "OFFER_READY");
+  const firstOffer = await host.inputValue("#offer-out");
+  assert.match(firstOffer, /^AXMWEBRTC1\./u);
+
+  // Exercise one real held handoff before the successful journey. The desk must
+  // expose an explicit clean retry rather than leaving stale signaling state for
+  // the human to infer how to clear.
+  await guest.fill("#guest-build", "wrong-build");
+  await guest.fill("#offer-in", firstOffer);
+  await guest.click("#make-answer");
+  await guest.waitForFunction(() => document.querySelector("#guest-status")?.dataset.code === "WRONG_BUILD");
+  assert.equal(await guest.locator("#retry-panel").isVisible(), true);
+  assert.match(await guest.locator("#next-action").innerText(), /match the build.*fresh attempt/iu);
+  assert.match(await guest.locator("#retry-panel").innerText(), /not remotely revoked/iu);
+  const retryBox = await guest.locator("#fresh-attempt").boundingBox();
+  assert.ok(retryBox && retryBox.height >= 44, `fresh-attempt target height: ${retryBox?.height ?? "missing"}`);
+  await guest.screenshot({ path: `${artifactDir}/browser-direct-guest-held-mobile.png`, fullPage: true });
+
+  // Correct the user-owned setting, then explicitly discard only this tab's
+  // transient peer/token state. The correction must survive the reset.
+  await guest.fill("#guest-build", "build-001");
+  await guest.click("#fresh-attempt");
+  assert.equal(await guest.inputValue("#guest-build"), "build-001");
+  assert.equal(await guest.inputValue("#offer-in"), "");
+  assert.equal(await guest.inputValue("#answer-out"), "");
+  assert.equal(await guest.locator("#retry-panel").isVisible(), false);
+  assert.equal(await guest.locator("#guest-status").getAttribute("data-code"), "NOT_STARTED");
+  assert.equal(await guest.evaluate(() => document.activeElement?.id), "offer-in");
+  assert.match(await guest.locator("#next-action").innerText(), /ask the host for a new offer/iu);
+
+  // Host creates a genuinely new session after the held attempt; no stale token
+  // is silently reused by the desk.
+  await host.click("#make-offer");
+  await host.waitForFunction((oldOffer) => {
+    const status = document.querySelector("#host-status")?.dataset.code;
+    const value = document.querySelector("#offer-out")?.value;
+    return status === "OFFER_READY" && value && value !== oldOffer;
+  }, firstOffer);
   const offer = await host.inputValue("#offer-out");
   assert.match(offer, /^AXMWEBRTC1\./u);
+  assert.notEqual(offer, firstOffer);
 
   await guest.fill("#offer-in", offer);
   await guest.click("#make-answer");
@@ -43,6 +81,7 @@ try {
   ]);
   assert.match(await host.locator("#host-status").innerText(), /DIRECT_CONNECTED/u);
   assert.match(await guest.locator("#guest-status").innerText(), /DIRECT_CONNECTED/u);
+  assert.equal(await guest.locator("#retry-panel").isVisible(), false);
 
   await host.fill("#message", "experience ping");
   await host.click("#send");
