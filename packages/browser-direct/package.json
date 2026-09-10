@@ -1,0 +1,28 @@
+{
+  "name": "axm-city-browser-direct",
+  "version": "0.1.0",
+  "description": "Portable local package for AXM's bounded direct browser WebRTC DataChannel adapter",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./manual_webrtc.mjs",
+    "./capability": "./capability.json",
+    "./provenance": "./PROVENANCE.json"
+  },
+  "files": [
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY.json",
+    "PROVENANCE.json",
+    "capability.json",
+    "manual_webrtc.mjs"
+  ],
+  "scripts": {
+    "prepack": "node ../../tools/prepare-browser-direct-package.mjs",
+    "postpack": "node ../../tools/prepare-browser-direct-package.mjs --cleanup"
+  }
+}
