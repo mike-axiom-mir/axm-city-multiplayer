@@ -7,19 +7,19 @@ let currentRole = null;
 
 const phases = ["phase-role", "phase-token", "phase-route", "phase-message"];
 const failureHelp = {
-  DIRECT_CONNECTION_UNAVAILABLE: "No relay fallback is hidden behind this failure. Keep both tabs open, confirm the devices have a route WebRTC can use, then retry from a fresh offer.",
-  INVALID_TOKEN: "The pasted token is not a valid AXMWEBRTC1 handoff. Copy the complete token again.",
-  TOKEN_CORRUPT: "The token changed during copy/paste. Ask the peer to copy it again.",
-  TOKEN_TOO_LARGE: "The handoff exceeds the bounded 64 KiB token limit.",
-  INVITE_EXPIRED: "This handoff expired. Create a fresh offer instead of extending stale connection state.",
-  WRONG_GAME: "The two browsers are set to different game IDs. Match the game ID, then create a fresh handoff.",
-  WRONG_BUILD: "The two browsers are set to different builds/rulesets. Match the build, then create a fresh handoff.",
-  WRONG_SESSION: "This answer belongs to a different host session. Use the answer created from the current offer.",
-  INCOMPATIBLE_TOKEN: "This is the wrong handoff type or protocol. Browser Direct uses AXMWEBRTC1 offer/answer tokens only.",
-  WEBRTC_UNAVAILABLE: "This browser does not expose the required WebRTC peer connection capability.",
-  CRYPTO_UNAVAILABLE: "This browser does not expose the Web Crypto capability required to verify handoff integrity.",
-  INVALID_CONFIGURATION: "Game/build settings are incomplete or outside the bounded contract.",
-  INVALID_STATE: "The signaling steps are out of order. Start again from a fresh offer.",
+  DIRECT_CONNECTION_UNAVAILABLE: "No relay fallback is hidden behind this failure. Keep both tabs open, confirm the devices have a route WebRTC can use, then start a fresh attempt.",
+  INVALID_TOKEN: "The pasted token is not a valid AXMWEBRTC1 handoff. Copy the complete token again, then start a fresh attempt.",
+  TOKEN_CORRUPT: "The token changed during copy/paste. Ask the peer to copy it again, then start a fresh attempt.",
+  TOKEN_TOO_LARGE: "The handoff exceeds the bounded 64 KiB token limit. Start a fresh attempt only after the oversized input is removed.",
+  INVITE_EXPIRED: "This handoff expired. Start a fresh attempt instead of extending stale connection state.",
+  WRONG_GAME: "The two browsers are set to different game IDs. Match the game ID, then start a fresh attempt.",
+  WRONG_BUILD: "The two browsers are set to different builds/rulesets. Match the build, then start a fresh attempt.",
+  WRONG_SESSION: "This answer belongs to a different host session. Start a fresh attempt and use only the answer created from its new offer.",
+  INCOMPATIBLE_TOKEN: "This is the wrong handoff type or protocol. Browser Direct uses AXMWEBRTC1 offer/answer tokens only. Start a fresh attempt with the correct handoff type.",
+  WEBRTC_UNAVAILABLE: "This browser does not expose the required WebRTC peer connection capability. A fresh attempt cannot add a missing browser capability.",
+  CRYPTO_UNAVAILABLE: "This browser does not expose the Web Crypto capability required to verify handoff integrity. A fresh attempt cannot add a missing browser capability.",
+  INVALID_CONFIGURATION: "Game/build settings are incomplete or outside the bounded contract. Correct them, then start a fresh attempt.",
+  INVALID_STATE: "The signaling steps are out of order. Start a fresh attempt rather than continuing stale signaling state.",
 };
 
 function setPhase(index, state) {
@@ -38,6 +38,10 @@ function setNext(message, tone = "neutral") {
   target.dataset.tone = tone;
 }
 
+function setRetryAvailable(visible) {
+  byId("retry-panel").hidden = !visible;
+}
+
 function setOutput(target, code, detail = "", tone = "neutral") {
   target.dataset.code = code;
   target.dataset.tone = tone;
@@ -52,7 +56,8 @@ function showFailure(target, error) {
   const code = error instanceof BrowserDirectError ? error.code : "UNEXPECTED_ERROR";
   const message = error instanceof Error ? error.message : String(error);
   setOutput(target, code, message, "held");
-  setNext(failureHelp[code] || "The direct attempt was held. Preserve the machine code shown here and retry only after checking the stated condition.", "held");
+  setNext(failureHelp[code] || "The direct attempt was held. Preserve the machine code shown here and start a fresh attempt only after checking the stated condition.", "held");
+  setRetryAvailable(true);
 }
 
 function resetPeers() {
@@ -70,6 +75,8 @@ function resetPeers() {
   setOutput(byId("host-status"), "NOT_STARTED");
   setOutput(byId("guest-status"), "NOT_STARTED");
   setOutput(byId("message-status"), "NO_MESSAGE_SENT");
+  setRetryAvailable(false);
+  document.body.dataset.directState = "idle";
 }
 
 function chooseRole(role) {
@@ -85,6 +92,24 @@ function chooseRole(role) {
     ? "Create an offer, send that token to the intended guest, and keep this tab open."
     : "Paste the host’s offer here. This browser will validate it before creating an answer.");
   document.body.dataset.role = role;
+}
+
+function startFreshAttempt() {
+  resetPeers();
+  if (!currentRole) {
+    setProgress(-1, 0);
+    setNext("Choose whether this browser is hosting or joining. Each device uses only its own side.");
+    byId("role-host").focus();
+    return;
+  }
+  setProgress(0, 1);
+  if (currentRole === "host") {
+    setNext("Fresh local attempt ready. Create a new offer; any token already shared is not remotely revoked and still expires on its own.", "ready");
+    byId("make-offer").focus();
+  } else {
+    setNext("Fresh local attempt ready. Ask the host for a new offer, then paste that new token here.", "ready");
+    byId("offer-in").focus();
+  }
 }
 
 async function copyToken(sourceId, button, label) {
@@ -103,6 +128,7 @@ async function copyToken(sourceId, button, label) {
 }
 
 function markConnected(target, peer, side) {
+  setRetryAvailable(false);
   setOutput(target, "DIRECT_CONNECTED", "direct DataChannel is open; no relay was used", "ready");
   setProgress(2, 3);
   setNext("Direct channel open. Send a test message; this proves transport only, not gameplay authority.", "ready");
@@ -117,11 +143,13 @@ function markConnected(target, peer, side) {
 
 byId("role-host").addEventListener("click", () => chooseRole("host"));
 byId("role-guest").addEventListener("click", () => chooseRole("guest"));
+byId("fresh-attempt").addEventListener("click", startFreshAttempt);
 byId("copy-offer").addEventListener("click", () => copyToken("offer-out", byId("copy-offer"), "Offer"));
 byId("copy-answer").addEventListener("click", () => copyToken("answer-out", byId("copy-answer"), "Answer"));
 
 byId("make-offer").addEventListener("click", async () => {
   try {
+    setRetryAvailable(false);
     host?.close();
     host = new ManualBrowserPeer({ gameId: byId("host-game").value, build: byId("host-build").value });
     setOutput(byId("host-status"), "GATHERING_DIRECT_CANDIDATES", "creating a local offer; this is not a connection claim");
@@ -136,6 +164,7 @@ byId("make-offer").addEventListener("click", async () => {
 
 byId("make-answer").addEventListener("click", async () => {
   try {
+    setRetryAvailable(false);
     guest?.close();
     guest = new ManualBrowserPeer({ gameId: byId("guest-game").value, build: byId("guest-build").value });
     setOutput(byId("guest-status"), "VALIDATING_OFFER", "checking protocol, game, build, expiry, and token integrity");
@@ -152,6 +181,7 @@ byId("make-answer").addEventListener("click", async () => {
 
 byId("accept-answer").addEventListener("click", async () => {
   try {
+    setRetryAvailable(false);
     if (!host) throw new BrowserDirectError("INVALID_STATE", "create a host offer first");
     setOutput(byId("host-status"), "VALIDATING_ANSWER", "checking this answer belongs to the current host session");
     await host.acceptAnswer(byId("answer-in").value.trim());
@@ -165,6 +195,7 @@ byId("accept-answer").addEventListener("click", async () => {
 
 byId("send").addEventListener("click", () => {
   try {
+    setRetryAvailable(false);
     const peer = currentRole === "host" ? host : currentRole === "guest" ? guest : null;
     if (!peer) throw new BrowserDirectError("INVALID_STATE", "choose a role and complete signaling first");
     peer.send({ type: "DEMO_MESSAGE", text: byId("message").value });
