@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 
 PREFIX = "AXMP2P1."
+MAX_INVITE_TOKEN_CHARS = 4096
 
 
 class InviteError(ValueError):
@@ -66,6 +67,12 @@ def _require_text(payload: dict, field: str) -> str:
     return value
 
 
+def _require_bounded_token(token: str) -> str:
+    if len(token) > MAX_INVITE_TOKEN_CHARS:
+        raise InviteError("invite exceeds maximum size")
+    return token
+
+
 def create_invite(*, game_id: str, build: str, host: str, port: int, lifetime_seconds: int = 3600, now: int | None = None) -> str:
     if any(type(value) is not str or not value for value in (game_id, build, host)):
         raise InviteError("game_id, build, and host must be non-empty strings")
@@ -87,12 +94,13 @@ def create_invite(*, game_id: str, build: str, host: str, port: int, lifetime_se
     payload = invite.as_payload()
     body = _canonical(payload)
     checksum = hashlib.sha256(body).digest()[:10]
-    return PREFIX + _b64e(body + checksum)
+    return _require_bounded_token(PREFIX + _b64e(body + checksum))
 
 
 def decode_invite(token: str, *, now: int | None = None) -> Invite:
     if type(token) is not str or not token.startswith(PREFIX):
         raise InviteError("unsupported invite prefix")
+    _require_bounded_token(token)
 
     raw = _b64d(token[len(PREFIX):])
     if len(raw) <= 10:
