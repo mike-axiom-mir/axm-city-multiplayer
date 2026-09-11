@@ -38,7 +38,9 @@ The guest constructs the same class, calls `acceptOffer(offerToken)`, returns th
 - A token SHA-256 detects accidental or unsophisticated modification; it is not a signature or proof of authorship.
 - WebRTC supplies encrypted DTLS transport after direct negotiation. This adapter does not authenticate a human identity or prove that game messages are honest.
 - Manual tokens contain SDP network candidates and must be shared only with the intended peer.
-- Empty ICE servers make the adapter local/offline and prevent hidden relay cost, but also reduce reachability. LAN/same-machine paths are the primary supported experiment. NAT/CGNAT/firewall failure is an honest `DIRECT_CONNECTION_UNAVAILABLE` outcome.
+- Empty ICE servers make this implementation local/offline and prevent it from configuring hidden STUN/TURN infrastructure. In addition, `AXMWEBRTC1` admission rejects any SDP ICE candidate whose declared candidate type is `relay` with `RELAY_CANDIDATE_FORBIDDEN`, before an incoming token reaches `setRemoteDescription()` and before a locally supplied SDP can be emitted as a direct token. This makes the no-TURN-relay traffic boundary executable even when the other endpoint or an injected `RTCPeerConnection` implementation is not the same trusted adapter.
+- The candidate check is a bounded SDP admission rule, not candidate authentication. It does not prove how a non-relay address was learned, establish Internet/NAT reachability, or prevent a malicious browser/network stack from behaving outside the declared SDP contract.
+- LAN/same-machine paths remain the primary supported experiment. NAT/CGNAT/firewall failure is an honest `DIRECT_CONNECTION_UNAVAILABLE` outcome.
 - There is no gameplay replication, rollback, voice, matchmaking, reconnect, hostile-process sandbox, or automatic fallback here.
 
 ## Verification
