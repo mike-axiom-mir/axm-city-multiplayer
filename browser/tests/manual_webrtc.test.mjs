@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { BrowserDirectError, ManualBrowserPeer, decodeBrowserDirectToken, describeBrowserDirectCapability } from "../manual_webrtc.mjs";
+import { BrowserDirectError, ManualBrowserPeer, decodeBrowserDirectToken, describeBrowserDirectCapability, encodeBrowserDirectToken } from "../manual_webrtc.mjs";
 
 class FakeChannel extends EventTarget {
   constructor(label) { super(); this.label = label; this.readyState = "connecting"; this.peer = null; }
@@ -46,6 +47,31 @@ class FakeRTC extends EventTarget {
   close() { this.connectionState = "closed"; }
 }
 
+function stableJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+}
+
+function uncheckedToken(body) {
+  const bodyJson = stableJson(body);
+  const envelope = {
+    body,
+    sha256: createHash("sha256").update(bodyJson, "utf8").digest("hex"),
+  };
+  return `AXMWEBRTC1.${Buffer.from(stableJson(envelope), "utf8").toString("base64url")}`;
+}
+
+function relaySdp() {
+  return [
+    "v=0",
+    "o=- 1 2 IN IP4 127.0.0.1",
+    "s=-",
+    "t=0 0",
+    "a=candidate:relay 1 UDP 1677729535 192.0.2.50 50000 typ relay raddr 0.0.0.0 rport 0",
+  ].join("\r\n");
+}
+
 test("manual tokens establish a direct channel with no ICE servers", async () => {
   const host = new ManualBrowserPeer({ gameId: "axm.test", build: "b1", rtcFactory: FakeRTC });
   const guest = new ManualBrowserPeer({ gameId: "axm.test", build: "b1", rtcFactory: FakeRTC });
@@ -75,6 +101,39 @@ test("tampered, swapped, and non-canonical tokens fail closed", async () => {
   await assert.rejects(() => decodeBrowserDirectToken(tampered, "offer"));
   await assert.rejects(() => decodeBrowserDirectToken(offer, "answer"), (error) => error.code === "INCOMPATIBLE_TOKEN");
   await assert.rejects(() => decodeBrowserDirectToken(`${offer}=`, "offer"), (error) => error.code === "INVALID_TOKEN");
+});
+
+test("self-consistent remote relay candidates are refused before WebRTC admission", async () => {
+  const token = uncheckedToken({
+    protocol: "axm.browser-direct/v1",
+    kind: "offer",
+    gameId: "axm.test",
+    build: "b1",
+    sessionId: "relay-attempt",
+    expiresAt: Math.floor(Date.now() / 1000) + 60,
+    sdp: relaySdp(),
+  });
+  const guest = new ManualBrowserPeer({ gameId: "axm.test", build: "b1", rtcFactory: FakeRTC });
+  await assert.rejects(
+    () => guest.acceptOffer(token),
+    (error) => error instanceof BrowserDirectError && error.code === "RELAY_CANDIDATE_FORBIDDEN",
+  );
+  assert.equal(guest._pc, null);
+});
+
+test("locally generated relay candidates cannot be encoded as direct tokens", async () => {
+  await assert.rejects(
+    () => encodeBrowserDirectToken({
+      protocol: "axm.browser-direct/v1",
+      kind: "offer",
+      gameId: "axm.test",
+      build: "b1",
+      sessionId: "relay-attempt",
+      expiresAt: Math.floor(Date.now() / 1000) + 60,
+      sdp: relaySdp(),
+    }),
+    (error) => error instanceof BrowserDirectError && error.code === "RELAY_CANDIDATE_FORBIDDEN",
+  );
 });
 
 test("missing browser capability is explicit", () => {
