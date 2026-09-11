@@ -65,9 +65,10 @@ function enforceNoRelayCandidates(sdp) {
     const line = rawLine.trim();
     if (!line.toLowerCase().startsWith("a=candidate:")) continue;
     const fields = line.split(/\s+/u);
-    const typeIndex = fields.findIndex((field) => field.toLowerCase() === "typ");
-    if (typeIndex >= 0 && fields[typeIndex + 1]?.toLowerCase() === "relay") {
-      fail("RELAY_CANDIDATE_FORBIDDEN", "TURN relay ICE candidates are forbidden by the direct-only policy");
+    for (let index = 0; index + 1 < fields.length; index += 1) {
+      if (fields[index].toLowerCase() === "typ" && fields[index + 1].toLowerCase() === "relay") {
+        fail("RELAY_CANDIDATE_FORBIDDEN", "TURN relay ICE candidates are forbidden by the direct-only policy");
+      }
     }
   }
 }
