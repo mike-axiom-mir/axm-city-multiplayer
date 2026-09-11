@@ -60,6 +60,18 @@ async function sha256Hex(text) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function enforceNoRelayCandidates(sdp) {
+  for (const rawLine of sdp.split(/\r\n|\n|\r/u)) {
+    const line = rawLine.trim();
+    if (!line.toLowerCase().startsWith("a=candidate:")) continue;
+    const fields = line.split(/\s+/u);
+    const typeIndex = fields.findIndex((field) => field.toLowerCase() === "typ");
+    if (typeIndex >= 0 && fields[typeIndex + 1]?.toLowerCase() === "relay") {
+      fail("RELAY_CANDIDATE_FORBIDDEN", "TURN relay ICE candidates are forbidden by the direct-only policy");
+    }
+  }
+}
+
 function validateBody(body, expectedKind, expected = {}) {
   exactKeys(body, BODY_KEYS, "token body");
   if (body.protocol !== PROTOCOL || body.kind !== expectedKind) {
@@ -68,6 +80,7 @@ function validateBody(body, expectedKind, expected = {}) {
   for (const field of ["gameId", "build", "sessionId", "sdp"]) {
     if (typeof body[field] !== "string" || !body[field]) fail("INVALID_TOKEN", `${field} must be a non-empty string`);
   }
+  enforceNoRelayCandidates(body.sdp);
   if (!Number.isSafeInteger(body.expiresAt)) fail("INVALID_TOKEN", "expiresAt must be an integer");
   if (body.expiresAt <= Math.floor(Date.now() / 1000)) fail("INVITE_EXPIRED", "browser direct token has expired");
   if (expected.gameId !== undefined && body.gameId !== expected.gameId) fail("WRONG_GAME", "game identifier does not match");
