@@ -1,0 +1,81 @@
+name: Public capability discovery
+
+on:
+  pull_request:
+    paths:
+      - ".axm/discovery-public.json"
+      - "registry/**"
+      - "tools/generate_public_capabilities.py"
+      - "tests/test_capability_registry.py"
+      - "axm_p2p/**"
+      - "AXM_P2P_CONTRACT.md"
+      - ".github/workflows/public-capability-discovery.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".axm/discovery-public.json"
+      - "registry/**"
+      - "tools/generate_public_capabilities.py"
+      - "tests/test_capability_registry.py"
+      - "axm_p2p/**"
+      - "AXM_P2P_CONTRACT.md"
+      - ".github/workflows/public-capability-discovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify generated capability registry
+        run: python tools/generate_public_capabilities.py --check
+
+      - name: Run repository contract suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Checkout pinned Discovery Buddy compatibility probe
+        uses: actions/checkout@v4
+        with:
+          repository: mike-axiom-mir/axm-discovery-buddy
+          ref: 1a94fc2481d1cfc9234dea7c86af4777126d3924
+          path: .capability-weaver/discovery-buddy
+
+      - name: Prove Discovery Buddy consumes the registry
+        env:
+          PYTHONPATH: ${{ github.workspace }}/.capability-weaver/discovery-buddy
+        run: |
+          python -m discovery_buddy scan . --output-dir "$RUNNER_TEMP/discovery-local"
+          python -m discovery_buddy scan . --public --output-dir "$RUNNER_TEMP/discovery-public"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          expected = {
+              "axm-p2p-direct-invite-v1",
+              "axm-p2p-direct-join-v1",
+              "axm-p2p-game-layer-v1",
+          }
+          local = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "discovery-local" / "local-discovery.json").read_text("utf-8")
+          )
+          assert local["summary"]["repositories"] == 1, local["summary"]
+          assert local["summary"]["capability_records"] == 3, local["summary"]
+          records = local["repositories"][0]["capabilities"]["records"]
+          assert {row["id"] for row in records} == expected, records
+
+          public = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "discovery-public" / "public-discovery.json").read_text("utf-8")
+          )
+          assert public["summary"]["repositories"] == 1, public["summary"]
+          repo = public["repositories"][0]
+          assert repo["repo"] == "mike-axiom-mir/axm-city-multiplayer", repo
+          assert {row["id"] for row in repo["capabilities"]["records"]} == expected
+          PY

@@ -1,0 +1,35 @@
+name: P2P reference tests
+
+on:
+  pull_request:
+    paths:
+      - "axm_p2p/**"
+      - "tests/**"
+      - ".github/workflows/p2p-reference.yml"
+  push:
+    branches: [main]
+    paths:
+      - "axm_p2p/**"
+      - "tests/**"
+      - ".github/workflows/p2p-reference.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile reference package
+        run: python -m compileall -q axm_p2p tests
+      - name: Run reference tests
+        run: python -m unittest discover -s tests -v

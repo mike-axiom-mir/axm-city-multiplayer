@@ -1,0 +1,124 @@
+name: Browser direct transport
+
+on:
+  pull_request:
+    paths:
+      - "browser/**"
+      - "packages/browser-direct/**"
+      - "tools/prepare-browser-direct-package.mjs"
+      - "README.md"
+      - "BROWSER_DIRECT_LINK.md"
+      - "AXM_P2P_CONTRACT.md"
+      - ".github/workflows/browser-direct.yml"
+  push:
+    branches: [main]
+    paths:
+      - "browser/**"
+      - "packages/browser-direct/**"
+      - "tools/prepare-browser-direct-package.mjs"
+      - "README.md"
+      - "BROWSER_DIRECT_LINK.md"
+      - "AXM_P2P_CONTRACT.md"
+      - ".github/workflows/browser-direct.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  provider-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Direct-only provider contract
+        run: node --test browser/tests/manual_webrtc.test.mjs
+      - name: Clean offline package consumer
+        run: node --test browser/tests/browser_direct_package.test.mjs
+
+  source-chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned browser test driver
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Serve reviewed source and run real browser journeys
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 > /tmp/axm-browser-source.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:8765/browser/ >/dev/null && break
+            sleep 0.25
+          done
+          node browser/tests/chromium_smoke.mjs
+          node browser/tests/chromium_experience.mjs
+      - name: Native reference regression
+        run: python3 -m unittest discover -s tests -v
+
+  installed-package-chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pack and install reviewed adapter locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/axm-browser-pack /tmp/axm-browser-consumer /tmp/axm-browser-site
+          npm pack ./packages/browser-direct --pack-destination /tmp/axm-browser-pack --json > /tmp/axm-browser-pack.json
+          TGZ="$(node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/axm-browser-pack.json","utf8")); process.stdout.write("/tmp/axm-browser-pack/"+x[0].filename)')"
+          printf '{"name":"axm-browser-ci-consumer","private":true,"type":"module"}\n' > /tmp/axm-browser-consumer/package.json
+          npm install --prefix /tmp/axm-browser-consumer --offline --ignore-scripts --no-audit --no-fund "$TGZ"
+          cp /tmp/axm-browser-consumer/node_modules/axm-city-browser-direct/manual_webrtc.mjs /tmp/axm-browser-site/manual_webrtc.mjs
+          cat > /tmp/axm-browser-site/test_harness.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>Installed AXM browser-direct package harness</title>
+          <script type="module">window.AXM = await import("./manual_webrtc.mjs"); window.ready = true;</script>
+          HTML
+          node - <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const installed = fs.readFileSync('/tmp/axm-browser-consumer/node_modules/axm-city-browser-direct/manual_webrtc.mjs');
+          const served = fs.readFileSync('/tmp/axm-browser-site/manual_webrtc.mjs');
+          const provenance = JSON.parse(fs.readFileSync('/tmp/axm-browser-consumer/node_modules/axm-city-browser-direct/PROVENANCE.json', 'utf8'));
+          const digest = crypto.createHash('sha256').update(installed).digest('hex');
+          if (!installed.equals(served)) throw new Error('served Chromium module differs from installed package bytes');
+          if (provenance.providerSource.sha256 !== digest) throw new Error('installed package bytes do not match provenance');
+          if (provenance.providerSource.gitBlob !== '56e418fca2f22fd6b3a836e332d0f055994046b4') throw new Error('provider Git blob drift');
+          if (provenance.prerequisite.commit !== '16e17183ac20392e00f565492b5ccf067188f9fa') throw new Error('provider prerequisite drift');
+          NODE
+      - name: Install pinned browser test driver
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Real Chromium from installed package bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/axm-browser-site
+          python3 -m http.server 8766 > /tmp/axm-browser-package-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:8766/test_harness.html >/dev/null && break
+            sleep 0.25
+          done
+          cd "$GITHUB_WORKSPACE"
+          AXM_BROWSER_ORIGIN=http://127.0.0.1:8766/test_harness.html node browser/tests/chromium_smoke.mjs

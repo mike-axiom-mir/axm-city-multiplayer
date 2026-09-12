@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 
 PREFIX = "AXMP2P1."
+MAX_INVITE_TOKEN_CHARS = 4096
 
 
 class InviteError(ValueError):
@@ -37,10 +38,6 @@ class Invite:
             "e": self.expires_at,
         }
 
-    def is_expired(self, *, now: int | None = None) -> bool:
-        now = int(time.time() if now is None else now)
-        return self.expires_at < now
-
 
 def _canonical(payload: dict) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -51,20 +48,38 @@ def _b64e(data: bytes) -> str:
 
 
 def _b64d(text: str) -> bytes:
+    if not text:
+        raise InviteError("invite is not valid base64url")
     pad = "=" * (-len(text) % 4)
     try:
-        return base64.urlsafe_b64decode(text + pad)
+        decoded = base64.b64decode(text + pad, altchars=b"-_", validate=True)
     except Exception as exc:
         raise InviteError("invite is not valid base64url") from exc
+    if _b64e(decoded) != text:
+        raise InviteError("invite is not canonical base64url")
+    return decoded
+
+
+def _require_text(payload: dict, field: str) -> str:
+    value = payload[field]
+    if type(value) is not str or not value:
+        raise InviteError(f"invalid {field} field")
+    return value
+
+
+def _require_bounded_token(token: str) -> str:
+    if len(token) > MAX_INVITE_TOKEN_CHARS:
+        raise InviteError("invite exceeds maximum size")
+    return token
 
 
 def create_invite(*, game_id: str, build: str, host: str, port: int, lifetime_seconds: int = 3600, now: int | None = None) -> str:
-    if not game_id or not build or not host:
-        raise InviteError("game_id, build, and host are required")
-    if not (1 <= port <= 65535):
-        raise InviteError("port must be between 1 and 65535")
-    if lifetime_seconds <= 0:
-        raise InviteError("lifetime_seconds must be positive")
+    if any(type(value) is not str or not value for value in (game_id, build, host)):
+        raise InviteError("game_id, build, and host must be non-empty strings")
+    if type(port) is not int or not (1 <= port <= 65535):
+        raise InviteError("port must be an integer between 1 and 65535")
+    if type(lifetime_seconds) is not int or lifetime_seconds <= 0:
+        raise InviteError("lifetime_seconds must be a positive integer")
 
     now = int(time.time() if now is None else now)
     invite = Invite(
@@ -79,12 +94,13 @@ def create_invite(*, game_id: str, build: str, host: str, port: int, lifetime_se
     payload = invite.as_payload()
     body = _canonical(payload)
     checksum = hashlib.sha256(body).digest()[:10]
-    return PREFIX + _b64e(body + checksum)
+    return _require_bounded_token(PREFIX + _b64e(body + checksum))
 
 
 def decode_invite(token: str, *, now: int | None = None) -> Invite:
-    if not token.startswith(PREFIX):
+    if type(token) is not str or not token.startswith(PREFIX):
         raise InviteError("unsupported invite prefix")
+    _require_bounded_token(token)
 
     raw = _b64d(token[len(PREFIX):])
     if len(raw) <= 10:
@@ -101,24 +117,37 @@ def decode_invite(token: str, *, now: int | None = None) -> Invite:
         raise InviteError("invite payload is invalid JSON") from exc
 
     required = {"v", "g", "b", "h", "p", "s", "k", "e"}
-    if set(payload) != required:
+    if type(payload) is not dict or set(payload) != required:
         raise InviteError("invite payload shape is invalid")
-    if payload["v"] != 1:
+    if body != _canonical(payload):
+        raise InviteError("invite payload is not canonical JSON")
+    if type(payload["v"]) is not int or payload["v"] != 1:
         raise InviteError("unsupported protocol version")
-    if not isinstance(payload["p"], int) or not (1 <= payload["p"] <= 65535):
+
+    game_id = _require_text(payload, "g")
+    build = _require_text(payload, "b")
+    host = _require_text(payload, "h")
+    session_id = _require_text(payload, "s")
+    session_key = _require_text(payload, "k")
+
+    port = payload["p"]
+    if type(port) is not int or not (1 <= port <= 65535):
         raise InviteError("invalid port")
+    expires_at = payload["e"]
+    if type(expires_at) is not int:
+        raise InviteError("invalid expiry")
 
     now = int(time.time() if now is None else now)
-    invite = Invite(
-        game_id=str(payload["g"]),
-        build=str(payload["b"]),
-        host=str(payload["h"]),
-        port=int(payload["p"]),
-        session_id=str(payload["s"]),
-        session_key=str(payload["k"]),
-        expires_at=int(payload["e"]),
+    if expires_at < now:
+        raise InviteError("invite has expired")
+
+    return Invite(
+        game_id=game_id,
+        build=build,
+        host=host,
+        port=port,
+        session_id=session_id,
+        session_key=session_key,
+        expires_at=expires_at,
         protocol=1,
     )
-    if invite.is_expired(now=now):
-        raise InviteError("invite has expired")
-    return invite
