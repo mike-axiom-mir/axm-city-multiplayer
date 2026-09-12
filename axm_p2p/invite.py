@@ -38,6 +38,10 @@ class Invite:
             "e": self.expires_at,
         }
 
+    def is_expired(self, *, now: int | None = None) -> bool:
+        now = int(time.time() if now is None else now)
+        return self.expires_at < now
+
 
 def _canonical(payload: dict) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -138,10 +142,7 @@ def decode_invite(token: str, *, now: int | None = None) -> Invite:
         raise InviteError("invalid expiry")
 
     now = int(time.time() if now is None else now)
-    if expires_at < now:
-        raise InviteError("invite has expired")
-
-    return Invite(
+    invite = Invite(
         game_id=game_id,
         build=build,
         host=host,
@@ -151,3 +152,6 @@ def decode_invite(token: str, *, now: int | None = None) -> Invite:
         expires_at=expires_at,
         protocol=1,
     )
+    if invite.is_expired(now=now):
+        raise InviteError("invite has expired")
+    return invite
