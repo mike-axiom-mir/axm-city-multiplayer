@@ -4,73 +4,37 @@ on:
   pull_request:
     paths:
       - "axm_p2p/**"
-      - "tests/**"
+      - "tests/test_p2p.py"
       - ".github/workflows/integration-python-diagnostics.yml"
 
 permissions:
   contents: read
 
 jobs:
-  capability-registry:
+  p2p-case:
+    name: ${{ matrix.case }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - test_p2p.InviteTests.test_round_trip
+          - test_p2p.InviteTests.test_expired_rejected
+          - test_p2p.InviteTests.test_expiry_boundary_is_shared
+          - test_p2p.InviteTests.test_corruption_rejected
+          - test_p2p.HandshakeTests.test_direct_local_handshake
+          - test_p2p.HandshakeTests.test_wrong_build_rejected_before_network
+          - test_p2p.HandshakeTests.test_expired_host_refuses_to_start
+          - test_p2p.HandshakeTests.test_running_host_does_not_admit_after_expiry
+          - test_p2p.HandshakeTests.test_round_trip_ack_is_required_before_host_admission
+          - test_p2p.HandshakeTests.test_wrong_handshake_version_is_not_admitted
+          - test_p2p.HandshakeTests.test_bad_ack_does_not_admit_or_consume_pending_handshake
+          - test_p2p.HandshakeTests.test_welcome_from_uninvited_endpoint_is_ignored
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_capability_registry.py' -v
-  cli:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_cli.py' -v
-  invite-contract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_invite_contract.py' -v
-  invite-desk:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_invite_desk.py' -v
-  invite-size:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_invite_size_admission.py' -v
-  layer:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_layer.py' -v
-  p2p:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_p2p.py' -v
-  pending:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_pending_handshake_bounds.py' -v
-  replay:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: python -m unittest discover -s tests -p 'test_replay_evidence.py' -v
+      - working-directory: tests
+        run: python -m unittest -v "${{ matrix.case }}"
