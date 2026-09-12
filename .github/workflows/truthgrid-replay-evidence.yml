@@ -1,0 +1,81 @@
+name: Replay evidence intake contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/truthgrid-replay-evidence.yml"
+      - "axm_p2p/replay_evidence.py"
+      - "tests/test_replay_evidence.py"
+      - "REPLAY_EVIDENCE_BRIDGE.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/truthgrid-replay-evidence.yml"
+      - "axm_p2p/replay_evidence.py"
+      - "tests/test_replay_evidence.py"
+      - "REPLAY_EVIDENCE_BRIDGE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Compile consumer surfaces
+        run: python -m compileall -q axm_p2p tests
+
+      - name: Run replay-evidence contract suite
+        run: python -m unittest discover -s tests -p 'test_replay_evidence.py' -v
+
+      - name: Run stable game-layer regressions
+        run: python -m unittest discover -s tests -p 'test_layer.py' -v
+
+      - name: Prove missing optional provider fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          capsule="$RUNNER_TEMP/capsule.json"
+          cat > "$capsule" <<'JSON'
+          {
+            "schema": "axm.truthgrid-replay-capsule/v0.01",
+            "engineVersion": "truthgrid-engine/v0.01",
+            "rulesetVersion": "truthgrid-rules/v0.01",
+            "seed": 7,
+            "genesisHash": "1111111111111111",
+            "actions": [],
+            "stateHashes": ["1111111111111111"],
+            "finalHash": "1111111111111111",
+            "receiptsSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "capsuleSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+          }
+          JSON
+          set +e
+          python -m axm_p2p.replay_evidence \
+            --provider-cli "$RUNNER_TEMP/provider-does-not-exist" \
+            --capsule "$capsule" > "$RUNNER_TEMP/hold.json"
+          code=$?
+          set -e
+          test "$code" = "2"
+          python - "$RUNNER_TEMP/hold.json" <<'PY'
+          import json, sys
+          receipt = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert receipt["status"] == "HOLD"
+          assert receipt["code"] == "PROVIDER_UNAVAILABLE"
+          assert receipt["evidenceAuthority"] == "NONE"
+          assert not any(receipt["authority"].values())
+          assert len(receipt["receiptSha256"]) == 64
+          PY

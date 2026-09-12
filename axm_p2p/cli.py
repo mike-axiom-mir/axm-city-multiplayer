@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 
@@ -27,7 +28,25 @@ def _parser() -> argparse.ArgumentParser:
 
     show = sub.add_parser("show", help="decode an invite locally")
     show.add_argument("invite")
+    show.add_argument(
+        "--json",
+        action="store_true",
+        help="emit stable JSON metadata without the session secret",
+    )
     return p
+
+
+def _public_invite_metadata(invite) -> dict:
+    """Return integration-safe invite metadata without credential material."""
+    return {
+        "protocol": invite.protocol,
+        "game_id": invite.game_id,
+        "build": invite.build,
+        "host": invite.host,
+        "port": invite.port,
+        "session_id": invite.session_id,
+        "expires_at": invite.expires_at,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -58,7 +77,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "show":
-        print(decode_invite(args.invite))
+        invite = decode_invite(args.invite)
+        if args.json:
+            print(json.dumps(_public_invite_metadata(invite), sort_keys=True, separators=(",", ":")))
+        else:
+            print(invite)
         return 0
 
     return 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
@@ -92,12 +93,30 @@ class AXMP2PLayer:
         self.game_id = game_id
         self.build = build
         self.state = LayerState.IDLE
+        self._state_lock = threading.Lock()
+        self._operation: str | None = None
         self._active_host_session: HostSession | None = None
 
     def _host_session_closed(self, session: HostSession) -> None:
-        if self._active_host_session is session:
-            self._active_host_session = None
-            self.state = LayerState.CLOSED
+        with self._state_lock:
+            if self._active_host_session is session:
+                self._active_host_session = None
+                self.state = LayerState.CLOSED
+
+    def _claim_operation(self, operation: str) -> str | None:
+        """Claim the layer's one transient operation without changing state."""
+        with self._state_lock:
+            if self._active_host_session is not None:
+                return "HOST_SESSION_ALREADY_ACTIVE"
+            if self._operation is not None:
+                return "LAYER_OPERATION_IN_PROGRESS"
+            self._operation = operation
+            return None
+
+    def _release_operation(self, operation: str) -> None:
+        with self._state_lock:
+            if self._operation == operation:
+                self._operation = None
 
     def host(
         self,
@@ -107,33 +126,48 @@ class AXMP2PLayer:
         bind_host: str = "0.0.0.0",
         lifetime_seconds: int = 3600,
     ) -> HostSession:
-        if self._active_host_session is not None:
-            raise HandshakeError("HOST_SESSION_ALREADY_ACTIVE")
+        operation = "HOST_START"
+        conflict = self._claim_operation(operation)
+        if conflict is not None:
+            raise HandshakeError(conflict)
 
-        token = create_invite(
-            game_id=self.game_id,
-            build=self.build,
-            host=public_host,
-            port=port,
-            lifetime_seconds=lifetime_seconds,
-        )
-        invite = decode_invite(token)
-        transport = P2PHost(invite, bind_host=bind_host)
-        transport.start()
-        session = HostSession(token, transport, on_close=self._host_session_closed)
-        self._active_host_session = session
-        self.state = LayerState.HOSTING
-        return session
+        try:
+            token = create_invite(
+                game_id=self.game_id,
+                build=self.build,
+                host=public_host,
+                port=port,
+                lifetime_seconds=lifetime_seconds,
+            )
+            invite = decode_invite(token)
+            transport = P2PHost(invite, bind_host=bind_host)
+            transport.start()
+            session = HostSession(token, transport, on_close=self._host_session_closed)
+            with self._state_lock:
+                self._active_host_session = session
+                self.state = LayerState.HOSTING
+                self._operation = None
+            return session
+        except BaseException:
+            self._release_operation(operation)
+            raise
 
     def join(self, invite_token: str, *, timeout: float = 2.0) -> JoinResult:
-        if self._active_host_session is not None:
+        operation = "JOIN"
+        conflict = self._claim_operation(operation)
+        if conflict is not None:
             return JoinResult(
                 LayerState.FAILED,
-                "HOST_SESSION_ALREADY_ACTIVE",
-                detail="close the active host session before joining",
+                conflict,
+                detail=(
+                    "close the active host session before joining"
+                    if conflict == "HOST_SESSION_ALREADY_ACTIVE"
+                    else "wait for the active layer operation to finish"
+                ),
             )
 
-        self.state = LayerState.JOINING
+        with self._state_lock:
+            self.state = LayerState.JOINING
         try:
             peer = join_host(
                 invite_token,
@@ -142,12 +176,23 @@ class AXMP2PLayer:
                 expected_build=self.build,
             )
         except InviteError as exc:
-            self.state = LayerState.FAILED
+            with self._state_lock:
+                self.state = LayerState.FAILED
+                self._operation = None
             return JoinResult(LayerState.FAILED, "INVALID_INVITE", detail=str(exc))
         except HandshakeError as exc:
-            self.state = LayerState.FAILED
+            with self._state_lock:
+                self.state = LayerState.FAILED
+                self._operation = None
             code = str(exc) or "DIRECT_CONNECTION_UNAVAILABLE"
             return JoinResult(LayerState.FAILED, code, detail=code)
+        except BaseException:
+            with self._state_lock:
+                self.state = LayerState.FAILED
+                self._operation = None
+            raise
 
-        self.state = LayerState.CONNECTED
+        with self._state_lock:
+            self.state = LayerState.CONNECTED
+            self._operation = None
         return JoinResult(LayerState.CONNECTED, "DIRECT_CONNECTED", peer=peer)

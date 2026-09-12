@@ -30,7 +30,7 @@ v0.1 therefore provides:
 2. expiry and corruption detection;
 3. game/build compatibility fields;
 4. a session secret shared only through the invite;
-5. an authenticated UDP join handshake whose replies are bound to the invited host endpoint;
+5. an authenticated UDP join handshake;
 6. deterministic failure when direct connectivity is unavailable;
 7. a stable game-facing `AXMP2PLayer` integration seam;
 8. thread-safe guest-admission events for host games.
@@ -201,6 +201,10 @@ The game owns the actual gameplay protocol after connection.
 
 The native reference adapter uses direct UDP sockets. Normal browser pages cannot open arbitrary UDP sockets, so a browser-only game must use a different transport adapter behind the same layer contract or a native local wrapper. Do not introduce an AXM-funded relay/rendezvous service merely to hide that platform limitation.
 
+This repository now includes one bounded browser-native experiment: `browser/manual_webrtc.mjs` uses a direct WebRTC DataChannel with manual copy/paste offer/answer signaling and an empty ICE-server list. Run the local two-peer desk with `python -m http.server 8765`, then open `http://127.0.0.1:8765/browser/`. See `BROWSER_DIRECT_LINK.md` for the API, executable Chromium gate, reachability limits, and security boundary.
+
+The browser `AXMWEBRTC1.` token is intentionally distinct from the native UDP `AXMP2P1.` invite. Neither is silently reinterpreted as the other.
+
 See `SHOOTER_LAYER_TEST.md` for the bounded future shooter integration gate and `examples/shooter_layer_smoke.py` for the host/join shape.
 
 ## Test
@@ -209,4 +213,4 @@ See `SHOOTER_LAYER_TEST.md` for the bounded future shooter integration gate and 
 python -m unittest discover -s tests -v
 ```
 
-The current reference suite checks invite round-trip, expiry, corruption, build mismatch, direct localhost handshake, rejection of an authenticated reply from an uninvited endpoint, stable layer result codes, and the game-facing host/join admission flow.
+The current reference suite checks invite round-trip, expiry, corruption, build mismatch, direct localhost handshake, stable layer result codes, and the game-facing host/join admission flow.

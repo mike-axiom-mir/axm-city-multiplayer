@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "axm-p2p"
+version = "0.1.0"
+description = "Offline-capable AXM direct-invite P2P reference contract and Python adapter"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Axiom-Mir" }]
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Games/Entertainment",
+  "Topic :: System :: Networking",
+]
+
+[project.scripts]
+axm-p2p = "axm_p2p.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["axm_p2p*"]
+
